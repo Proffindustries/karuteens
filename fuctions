@@ -1,0 +1,121 @@
+This list is structured by platform sections so you can use it later for database planning, API endpoints, or feature documentation.
+---
+## USER & ACCOUNT FUNCTIONS
+1. **Function of creating an account** — Allows a new user to sign up using email, phone number, or student ID.
+2. **Function of logging in/out** — Authenticates and securely logs the user in or out of the system.
+3. **Function of resetting password** — Sends recovery email or OTP for forgotten passwords.
+4. **Function of editing profile** — Enables updating name, bio, avatar, education, and personal info.
+5. **Function of verifying user identity** — Confirms identity via student email or document upload.
+6. **Function of deleting account** — Permanently removes the user profile and data.
+7. **Function of setting privacy preferences** — Controls visibility of profile, posts, and contact info.
+8. **Function of deactivating account** — Temporarily hides account without deletion.
+9. **Function of managing notifications** — Lets users enable, disable, or mute specific alerts.
+10. **Function of reporting bugs or feedback** — Sends app feedback or issue reports to admin.
+---
+##  SOCIAL & CONNECTION FUNCTIONS
+11. **Function of adding friends** — Sends and accepts friend requests.
+12. **Function of following users** — Allows one-way following of public accounts or creators.
+13. **Function of recommending friends** — Suggests users based on mutual friends, classes, or location.
+14. **Function of blocking or unblocking users** — Restricts communication and visibility.
+15. **Function of viewing profiles** — Displays another user’s details, photos, and posts.
+16. **Function of viewing mutual friends** — Shows shared connections between two users.
+17. **Function of tagging friends** — Allows mentioning users in posts, photos, or comments.
+18. **Function of inviting friends** — Sends invites via link, email, or QR code.
+---
+## POSTS, FEED & REACTION FUNCTIONS
+19. **Function of creating a post** — Publish text, image, or video content.
+20. **Function of editing or deleting a post** — Modify or remove previously shared content.
+21. **Function of liking and reacting** — Express emotions through various reaction types.
+22. **Function of commenting on posts** — Add opinions, questions, or discussions.
+23. **Function of sharing posts** — Repost content on your timeline or via messages.
+24. **Function of saving posts** — Bookmark posts for later reading.
+25. **Function of viewing feeds** — Loads personalized or trending content from friends and groups.
+26. **Function of reporting a post** — Flags inappropriate content for moderation.
+27. **Function of filtering feed** — Sort feed by trending, following, or topic interests.
+---
+##  MESSAGING & INTERACTION FUNCTIONS
+28. **Function of sending messages** — Send text, images, or files to friends or groups.
+29. **Function of creating group chats** — Start and manage multiple-member conversations.
+30. **Function of making voice or video calls** — Real-time communication between users.
+31. **Function of sending voice notes** — Send recorded audio messages.
+32. **Function of reacting to messages** — Add emojis or quick responses in chats.
+33. **Function of deleting or editing messages** — Remove or correct messages.
+34. **Function of seeing online status** — Show active or last seen time.
+35. **Function of typing indicators** — Display when someone is typing.
+---
+## STUDY & EDUCATION FUNCTIONS
+36. **Function of AI study buddy** — Provides tutoring, answers, or explanations using AI.
+37. **Function of searching for study materials** — Find notes, past papers, or resources.
+38. **Function of uploading academic content** — Share notes, presentations, or tutorials.
+39. **Function of creating study rooms** — Virtual collaboration rooms for group learning.
+40. **Function of scheduling study sessions** — Set reminders or events for learning.
+41. **Function of joining peer tutoring sessions** — Connect with other students for help.
+42. **Function of accessing leaderboards** — Displays rankings or progress points.
+43. **Function of taking online quizzes or tests** — Practice questions and instant results.
+44. **Function of AI content summarization** — Auto-summarizes lessons or notes.
+45. **Function of resource recommendation** — Suggests new materials or topics to study.
+---
+##  MEDIA, STORIES & ENTERTAINMENT FUNCTIONS
+46. **Function of creating stories or reels** — Upload short videos or pictures with music.
+47. **Function of viewing stories** — Browse friends’ daily stories.
+48. **Function of liking or reacting to reels** — Engage with short-form video content.
+49. **Function of watching long videos** — Stream educational or entertainment videos.
+50. **Function of subscribing to creators** — Follow creators for exclusive updates.
+51. **Function of live streaming** — Broadcast real-time video sessions or classes.
+52. **Function of donating during streams** — Send monetary support to creators.
+---
+##  MARKETPLACE & ECONOMIC FUNCTIONS
+53. **Function of creating product listings** — Post items or services for sale.
+54. **Function of searching products** — Browse by keyword, category, or location.
+55. **Function of buying and selling** — Secure transactions between users.
+56. **Function of adding to cart** — Temporarily store items before checkout.
+57. **Function of processing payments** — Use M-Pesa, crypto, or cards for payment.
+58. **Function of rating sellers and buyers** — Leave reviews after transactions.
+59. **Function of managing orders** — Track purchase and delivery status.
+60. **Function of reporting fraudulent listings** — Protect users from scams.
+61. **Function of promoting listings** — Paid boosts for product visibility.
+---
+##  EVENTS & COMMUNITY FUNCTIONS
+62. **Function of creating events** — Add event details, posters, and dates.
+63. **Function of RSVPing or joining events** — Attend and share interest.
+64. **Function of hosting live sessions** — Stream webinars or community meetups.
+65. **Function of buying tickets** — Purchase access to premium or live events.
+66. **Function of sharing event links** — Promote via invites or QR codes.
+67. **Function of creating fundraisers** — Raise money for school or charity projects.
+68. **Function of donating to causes** — Send money to verified campaigns.
+---
+##  MONETIZATION & BUSINESS FUNCTIONS
+69. **Function of running ads** — Promote pages, events, or marketplace listings.
+70. **Function of managing ad budget** — Control spending and targeting.
+71. **Function of viewing ad analytics** — Check impressions, clicks, and engagement.
+72. **Function of receiving revenue** — Earnings from ads, sales, or donations.
+73. **Function of withdrawing money** — Transfer funds to M-Pesa or crypto wallets.
+74. **Function of subscribing to premium** — Access exclusive or ad-free experiences.
+---
+##  AI, RECOMMENDATION & PERSONALIZATION FUNCTIONS
+75. **Function of recommending friends** — Suggests potential connections intelligently.
+76. **Function of recommending content** — Feeds personalized posts or materials.
+77. **Function of recommending study topics** — Suggests relevant notes or lessons.
+78. **Function of detecting spam or harmful content** — Uses AI moderation.
+79. **Function of summarizing conversations** — AI summarizes chats or study notes.
+80. **Function of chat with AI bot** — Conversational help for study or social questions.
+---
+##  ADMINISTRATION & SECURITY FUNCTIONS
+81. **Function of verifying reports** — Admin reviews reported content.
+82. **Function of banning or suspending users** — Restricts violators or spammers.
+83. **Function of managing announcements** — Broadcast updates or maintenance alerts.
+84. **Function of viewing analytics dashboard** — Overview of user activity, traffic, and engagement.
+85. **Function of reviewing verification requests** — Confirms authenticity of users or pages.
+86. **Function of managing categories & tags** — Controls discoverability and structure.
+87. **Function of moderating content** — Approves, removes, or flags inappropriate material.
+---
+##  SYSTEM, SETTINGS & MISC FUNCTIONS
+88. **Function of switching language or theme** — Changes interface language or dark/light mode.
+89. **Function of enabling offline mode** — Access cached content without internet.
+90. **Function of syncing PWA data** — Keeps app data updated across devices.
+91. **Function of push notifications** — Sends real-time alerts for events or messages.
+92. **Function of managing cookies & privacy consent** — Ensures legal compliance.
+93. **Function of contacting support** — Chat or email help desk.
+94. **Function of bug tracking** — Logs errors for developers.
+95. **Function of session management** — Detects and terminates suspicious logins.
+---

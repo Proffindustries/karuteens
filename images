@@ -1,0 +1,43 @@
+To send an image via OpenRouters' API, you would typically follow these steps:
+
+1. Prepare Your API Key
+Ensure you have a valid API key from OpenRouters. If not, you may need to:
+• Register for an account on OpenRouters.
+• Generate an API key from the control panel or account settings.
+
+2. Format Your Image
+Your image will need to be in a compatible format (e.g., JPEG, PNG).  
+Possible approaches to send it via API:
+• Direct Base64 Encoding: Convert the image to a Base64-encoded string.
+• File Upload Endpoint: Use an API endpoint that accepts `multipart/form-data` (if supported by OpenRouters).
+
+3. Use the OpenRouters API (Example)
+The exact API endpoint and parameters depend on OpenRouters' documentation. Below is a generic example using `curl`:
+
+If Supporting File Upload (Multipart)
+```bash
+curl -X POST \
+  'https://api.openrouters.com/v1/image' \
+  -H 'Authorization: Bearer YOURAPIKEY' \
+  -F 'image=@/path/to/your/image.jpg;type=image/jpeg'
+```
+
+If Using Base64-Encoded Image
+```bash
+curl -X POST \
+  'https://api.openrouters.com/v1/image' \
+  -H 'Authorization: Bearer YOURAPIKEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"image": "data:image/jpeg;base64,/9j/4[...encoded data...]"}'
+```
+
+4. Response
+The API should return a success response (e.g., 200 OK) or error details.
+
+Note:
+• OpenRouters may have a public API documentation where exact parameters and examples are listed.  
+• Ensure your API key is secure (do not share it publicly).  
+
+To help you further, could you provide:
+1. The specific OpenRouters API endpoint URL.
+2. Any additional details from the OpenRouters documentation?

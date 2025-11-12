@@ -1,0 +1,117 @@
+ Core Pages
+Landing Page — Introduction to Karuteens, registration, and overview of main features.
+Home / News Feed — Aggregated posts from friends, groups, and pages.
+Profile (Timeline) — User’s personal posts, bio, photos, and friends list.
+Search — Discover people, pages, posts, groups, events, and marketplace listings.
+Notifications — All alerts about interactions, messages, and system updates.
+Settings & Privacy — Manage account, security, visibility, and preferences.
+
+ Social & Communication
+Messenger — 1:1 and group chats, calls, voice messages, and media sharing.
+Reels / Stories — Short videos and time-limited stories with music and stickers.
+Watch / Video — Long-form videos, series, and content subscriptions.
+Memories — View and reshare past posts or milestones.
+
+ Community & Collaboration
+Groups — Join or create communities for classes, topics, or clubs.
+Study Rooms — Virtual rooms with shared whiteboards and collaboration tools.
+Pages — Public or business profiles for creators, organizations, and brands.
+Creator Studio — Manage posts, insights, and monetization as a creator.
+Events — Discover or create online/offline events, RSVP, and ticket management.
+Campus Life Hub — Campus map, activities, club events, and room booking.
+AI Study Buddy — Personalized academic assistant powered by AI.
+Exam Resources — Past papers, notes, and unit-based study materials.
+
+ Marketplace & Commerce
+Marketplace — Buy/sell items, services, and listings.
+Product Detail Page — View product info, images, and contact seller.
+Seller Dashboard — Manage listings, sales, and shop analytics.
+Cart / Checkout — Review and complete purchases.
+Payment Page — M-Pesa and crypto payment integrations.
+
+ Events & Entertainment
+Event Listing Page — Browse all upcoming and trending events.
+Event Detail Page — View event info, RSVP, and join online sessions.
+Entertainment Arena — Watch movies, shows, and student content streams.
+Fundraisers / Donations — Contribute to verified student or community causes.
+
+ Education & Study Tools
+Study Dashboard — Overview of study progress, achievements, and AI suggestions.
+Peer Tutoring Marketplace — Find or offer tutoring services.
+Study Calendar — Schedule sessions, reminders, and upcoming exams.
+Collaboration Notes — Shared document editing and uploads.
+Leaderboards — Track academic progress and achievements.
+
+ Finance & Monetization
+Payments & Wallet — Manage transactions, subscriptions, and micro-payments.
+Ads Manager — Create and monitor promotional campaigns.
+Revenue Dashboard — Track income from subscriptions, sales, or ads.
+Premium Features — Unlock advanced AI tools or study features.
+
+ Safety, Help & Admin
+Help & Support — FAQs, ticket submission, and support chat.
+Report Center — Report users, content, or issues.
+Safety Center — Mental health, campus security, and emergency contacts.
+Admin Dashboard — Moderation, analytics, and system management.
+Verification Portal — Verify student identity via university email.
+
+ PWA & System Features
+Offline Mode Page — View cached content when offline.
+Push Notifications Page — Manage notification preferences.
+Language & Region Settings — Choose language and country content.
+Legal Pages — Terms of Service, Privacy Policy, Cookie Consent.
+
+Core
+/ (landing already done)
+/feed
+/profile
+/search
+/notifications
+/settings
+Social & communication
+/messenger
+/reels
+/watch
+/memories
+Community & collaboration
+/groups
+/study-rooms
+/pages
+/creator-studio
+/events
+/events/[id]
+/campus
+/study-buddy
+/resources
+Marketplace & commerce
+/marketplace
+/marketplace/product/[id]
+/seller
+/cart
+/checkout
+/payment
+Events & entertainment
+/entertainment
+/fundraisers
+Education & study tools
+/study/dashboard
+/tutoring
+/calendar
+/notes
+/leaderboards
+Finance & monetization
+/wallet
+/ads
+/revenue
+/premium
+Safety, help & admin
+/help
+/report
+/safety
+/admin
+/verify
+PWA & system
+/language
+(Offline page can be handled via service worker later)
+(Push notifications page is covered by /notifications)
+Legal pages will be added next if you want (Terms, Privacy, Cookies)
