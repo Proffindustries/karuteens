@@ -18,94 +18,173 @@
   });
   
   async function loadEvent() {
-    const { data } = await supabase
-      .from('events')
-      .select('*, profiles!events_organizer_id_fkey(username, avatar_url)')
-      .eq('id', eventId)
-      .single();
-    
-    if (data) {
-      event = data;
-      isOrganizer = $user?.id === data.organizer_id;
-      await loadAttendees();
-      await checkRsvp();
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        event = result.data;
+        isOrganizer = $user?.id === result.data.organizer_id;
+        await loadAttendees();
+        await checkRsvp();
+      } else {
+        // Fallback to Supabase if API fails
+        const { data } = await supabase
+          .from('events')
+          .select('*, profiles!events_organizer_id_fkey(username, avatar_url)')
+          .eq('id', eventId)
+          .single();
+        
+        if (data) {
+          event = data;
+          isOrganizer = $user?.id === data.organizer_id;
+          await loadAttendees();
+          await checkRsvp();
+        }
+      }
+    } catch (error) {
+      console.error('Error loading event:', error);
+      // Fallback to Supabase if API fails
+      const { data } = await supabase
+        .from('events')
+        .select('*, profiles!events_organizer_id_fkey(username, avatar_url)')
+        .eq('id', eventId)
+        .single();
+      
+      if (data) {
+        event = data;
+        isOrganizer = $user?.id === data.organizer_id;
+        await loadAttendees();
+        await checkRsvp();
+      }
     }
     loading = false;
   }
   
   async function loadAttendees() {
-    const { data, count } = await supabase
-      .from('event_attendees')
-      .select('*, profiles!event_attendees_user_id_fkey(username, avatar_url)', { count: 'exact' })
-      .eq('event_id', eventId);
-    
-    attendees = data || [];
-    attendeeCount = count || 0;
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}/attendees`);
+      const result = await response.json();
+      
+      if (result.success) {
+        // For now, we'll still use Supabase to get profile info for attendees
+        // In a full implementation, we'd enhance our API to include this
+        const { data, count } = await supabase
+          .from('event_attendees')
+          .select('*, profiles!event_attendees_user_id_fkey(username, avatar_url)', { count: 'exact' })
+          .eq('event_id', eventId);
+        
+        attendees = data || [];
+        attendeeCount = count || 0;
+      } else {
+        // Fallback to Supabase if API fails
+        const { data, count } = await supabase
+          .from('event_attendees')
+          .select('*, profiles!event_attendees_user_id_fkey(username, avatar_url)', { count: 'exact' })
+          .eq('event_id', eventId);
+        
+        attendees = data || [];
+        attendeeCount = count || 0;
+      }
+    } catch (error) {
+      console.error('Error loading attendees:', error);
+      // Fallback to Supabase if API fails
+      const { data, count } = await supabase
+        .from('event_attendees')
+        .select('*, profiles!event_attendees_user_id_fkey(username, avatar_url)', { count: 'exact' })
+        .eq('event_id', eventId);
+      
+      attendees = data || [];
+      attendeeCount = count || 0;
+    }
   }
   
   async function checkRsvp() {
     if (!$user) return;
-    const { data } = await supabase
-      .from('event_attendees')
-      .select('*')
-      .eq('event_id', eventId)
-      .eq('user_id', $user.id)
-      .single();
-    
-    myRsvp = data;
+    try {
+      // For now, we'll still use Supabase for RSVP checking
+      // In a full implementation, we'd enhance our API to handle this
+      const { data } = await supabase
+        .from('event_attendees')
+        .select('*')
+        .eq('event_id', eventId)
+        .eq('user_id', $user.id)
+        .single();
+      
+      myRsvp = data;
+    } catch (error) {
+      console.error('Error checking RSVP:', error);
+    }
   }
   
   async function rsvp(status: string) {
     if (!$user) { window.location.href = '/auth/sign-in'; return; }
     
-    if (myRsvp) {
-      // Update existing RSVP
-      const { error } = await supabase
-        .from('event_attendees')
-        .update({ status })
-        .eq('id', myRsvp.id);
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}/attendees`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status })
+      });
       
-      if (!error) {
-        myRsvp.status = status;
-      }
-    } else {
-      // Create new RSVP
-      const { data, error } = await supabase
-        .from('event_attendees')
-        .insert({ event_id: eventId, user_id: $user.id, status })
-        .select()
-        .single();
+      const result = await response.json();
       
-      if (!error) {
-        myRsvp = data;
+      if (result.success) {
+        myRsvp = result.data;
         await loadAttendees();
+      } else {
+        alert(result.error || 'Failed to RSVP');
       }
+    } catch (error) {
+      console.error('Error RSVPing:', error);
+      alert('Failed to RSVP');
     }
   }
   
   async function cancelRsvp() {
     if (!myRsvp) return;
-    const { error } = await supabase
-      .from('event_attendees')
-      .delete()
-      .eq('id', myRsvp.id);
-    
-    if (!error) {
-      myRsvp = null;
-      await loadAttendees();
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}/attendees`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        myRsvp = null;
+        await loadAttendees();
+      } else {
+        alert('Failed to cancel RSVP');
+      }
+    } catch (error) {
+      console.error('Error canceling RSVP:', error);
+      alert('Failed to cancel RSVP');
     }
   }
   
   async function deleteEvent() {
     if (!confirm('Delete this event? This cannot be undone.')) return;
     
-    const { error } = await supabase
-      .from('events')
-      .delete()
-      .eq('id', eventId);
-    
-    if (!error) {
-      window.location.href = '/events';
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: 'DELETE'
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        window.location.href = '/events';
+      } else {
+        alert(result.error || 'Failed to delete event');
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event');
     }
   }
   

@@ -35,29 +35,83 @@
   });
   
   async function loadEvent() {
-    const { data } = await supabase
-      .from('events')
-      .select('*')
-      .eq('id', eventId)
-      .single();
-    
-    if (data) {
-      if ($user?.id !== data.organizer_id) {
-        window.location.href = `/events/${eventId}`;
-        return;
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        const data = result.data;
+        if ($user?.id !== data.organizer_id) {
+          window.location.href = `/events/${eventId}`;
+          return;
+        }
+        event = data;
+        form.title = data.title;
+        form.description = data.description || '';
+        form.location = data.location || '';
+        form.isOnline = data.is_online;
+        form.meetingUrl = data.meeting_url || '';
+        form.category = data.category;
+        form.startTime = data.start_time?.slice(0, 16) || '';
+        form.endTime = data.end_time?.slice(0, 16) || '';
+        form.maxAttendees = data.max_attendees?.toString() || '';
+        form.isPublic = data.is_public;
+        coverPreview = data.cover_url;
+      } else {
+        // Fallback to Supabase if API fails
+        const { data } = await supabase
+          .from('events')
+          .select('*')
+          .eq('id', eventId)
+          .single();
+        
+        if (data) {
+          if ($user?.id !== data.organizer_id) {
+            window.location.href = `/events/${eventId}`;
+            return;
+          }
+          event = data;
+          form.title = data.title;
+          form.description = data.description || '';
+          form.location = data.location || '';
+          form.isOnline = data.is_online;
+          form.meetingUrl = data.meeting_url || '';
+          form.category = data.category;
+          form.startTime = data.start_time?.slice(0, 16) || '';
+          form.endTime = data.end_time?.slice(0, 16) || '';
+          form.maxAttendees = data.max_attendees?.toString() || '';
+          form.isPublic = data.is_public;
+          coverPreview = data.cover_url;
+        }
       }
-      event = data;
-      form.title = data.title;
-      form.description = data.description || '';
-      form.location = data.location || '';
-      form.isOnline = data.is_online;
-      form.meetingUrl = data.meeting_url || '';
-      form.category = data.category;
-      form.startTime = data.start_time?.slice(0, 16) || '';
-      form.endTime = data.end_time?.slice(0, 16) || '';
-      form.maxAttendees = data.max_attendees?.toString() || '';
-      form.isPublic = data.is_public;
-      coverPreview = data.cover_url;
+    } catch (error) {
+      console.error('Error loading event:', error);
+      // Fallback to Supabase if API fails
+      const { data } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId)
+        .single();
+      
+      if (data) {
+        if ($user?.id !== data.organizer_id) {
+          window.location.href = `/events/${eventId}`;
+          return;
+        }
+        event = data;
+        form.title = data.title;
+        form.description = data.description || '';
+        form.location = data.location || '';
+        form.isOnline = data.is_online;
+        form.meetingUrl = data.meeting_url || '';
+        form.category = data.category;
+        form.startTime = data.start_time?.slice(0, 16) || '';
+        form.endTime = data.end_time?.slice(0, 16) || '';
+        form.maxAttendees = data.max_attendees?.toString() || '';
+        form.isPublic = data.is_public;
+        coverPreview = data.cover_url;
+      }
     }
     loading = false;
   }
@@ -102,31 +156,41 @@
       coverUrl = null;
     }
     
-    const { error } = await supabase
-      .from('events')
-      .update({
-        title: form.title.trim(),
-        description: form.description || null,
-        location: form.location || null,
-        is_online: form.isOnline,
-        meeting_url: form.meetingUrl || null,
-        cover_url: coverUrl,
-        category: form.category,
-        start_time: form.startTime,
-        end_time: form.endTime || null,
-        max_attendees: form.maxAttendees ? parseInt(form.maxAttendees) : null,
-        is_public: form.isPublic,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', eventId);
-    
-    if (error) {
-      alert(error.message);
-      saving = false;
-      return;
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description || null,
+          location: form.location || null,
+          isOnline: form.isOnline,
+          meetingUrl: form.meetingUrl || null,
+          coverUrl: coverUrl,
+          category: form.category,
+          startTime: form.startTime,
+          endTime: form.endTime || null,
+          maxAttendees: form.maxAttendees ? parseInt(form.maxAttendees) : null,
+          isPublic: form.isPublic
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        window.location.href = `/events/${eventId}`;
+      } else {
+        alert(result.error || 'Failed to save event');
+      }
+    } catch (error) {
+      console.error('Error saving event:', error);
+      alert('Failed to save event');
     }
     
-    window.location.href = `/events/${eventId}`;
+    saving = false;
   }
 </script>
 

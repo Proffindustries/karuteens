@@ -53,18 +53,33 @@
   });
 
   async function loadEvents() {
-    const { data } = await supabase
-      .from('events')
-      .select('*, event_attendees(count)')
-      .eq('is_public', true)
-      .gte('start_time', new Date().toISOString())
-      .order('start_time', { ascending: true });
-    
-    if (data) {
-      events = data.map(e => ({
-        ...e,
-        attendee_count: e.event_attendees?.[0]?.count || 0
-      }));
+    try {
+      // Use our API instead of Supabase directly
+      const response = await fetch('/api/events');
+      const result = await response.json();
+      
+      if (result.success) {
+        events = result.data.map((e: any) => ({
+          ...e,
+          attendee_count: 0 // We'll need to get this from our API or add it later
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading events:', error);
+      // Fallback to Supabase if API fails
+      const { data } = await supabase
+        .from('events')
+        .select('*, event_attendees(count)')
+        .eq('is_public', true)
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true });
+      
+      if (data) {
+        events = data.map(e => ({
+          ...e,
+          attendee_count: e.event_attendees?.[0]?.count || 0
+        }));
+      }
     }
   }
 
@@ -104,43 +119,56 @@
       uploading = false;
     }
 
-    const { data, error } = await supabase
-      .from('events')
-      .insert({
-        organizer_id: $user.id,
-        title: form.title.trim(),
-        description: form.description || null,
-        location: form.location || null,
-        is_online: form.isOnline,
-        meeting_url: form.meetingUrl || null,
-        cover_url: coverUrl,
-        category: form.category,
-        start_time: form.startTime,
-        end_time: form.endTime || null,
-        max_attendees: form.maxAttendees ? parseInt(form.maxAttendees) : null,
-        is_public: form.isPublic
-      })
-      .select()
-      .single();
+    // Use our API instead of Supabase directly
+    try {
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description || null,
+          location: form.location || null,
+          isOnline: form.isOnline,
+          meetingUrl: form.meetingUrl || null,
+          coverUrl: coverUrl,
+          category: form.category,
+          startTime: form.startTime,
+          endTime: form.endTime || null,
+          maxAttendees: form.maxAttendees ? parseInt(form.maxAttendees) : null,
+          isPublic: form.isPublic
+        })
+      });
 
-    if (error) {
-      alert(error.message);
-      creating = false;
-      return;
+      const result = await response.json();
+      
+      if (result.success) {
+        // Auto-add organizer as attendee using our API
+        await fetch(`/api/events/${result.data.id}/attendees`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'going'
+          })
+        });
+
+        showCreate = false;
+        form = { title: '', description: '', location: '', isOnline: false, meetingUrl: '', category: 'Academic', startTime: '', endTime: '', maxAttendees: '', isPublic: true };
+        coverFile = null; coverPreview = null;
+        await loadEvents();
+        window.location.href = `/events/${result.data.id}`;
+      } else {
+        alert(result.error || 'Failed to create event');
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert('Failed to create event');
     }
 
-    // Auto-add organizer as attendee
-    await supabase.from('event_attendees').insert({
-      event_id: data.id,
-      user_id: $user.id,
-      status: 'going'
-    });
-
-    showCreate = false;
-    form = { title: '', description: '', location: '', isOnline: false, meetingUrl: '', category: 'Academic', startTime: '', endTime: '', maxAttendees: '', isPublic: true };
-    coverFile = null; coverPreview = null;
-    await loadEvents();
-    window.location.href = `/events/${data.id}`;
+    creating = false;
   }
 
   function formatDate(dateStr: string) {

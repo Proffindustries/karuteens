@@ -9,5 +9,12 @@ if (!env.DATABASE_URL) {
 	);
 }
 
-const client = postgres(env.DATABASE_URL);
+// Configure postgres client with options that work with Supabase
+const client = postgres(env.DATABASE_URL, {
+  // Add connection pooling options
+  max: 20,
+  idle_timeout: 20,
+  connect_timeout: 10,
+});
+
 export const db = drizzle(client, { schema });

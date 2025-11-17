@@ -13,7 +13,8 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 		'/',
 		'/auth/sign-in',
 		'/auth/sign-up',
-		'/auth/reset'
+		'/auth/reset',
+		'/api/test-db'  // Add our test endpoint to public paths
 	]);
 
 	const isAuthPath = path.startsWith('/auth');

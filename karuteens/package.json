@@ -60,6 +60,7 @@
     "@supabase/supabase-js": "^2.79.0",
     "firebase": "^12.5.0",
     "lucide-svelte": "^0.552.0",
+    "pg": "^8.16.3",
     "postgres": "^3.4.7"
   }
 }

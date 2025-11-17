@@ -1,8 +1,15 @@
 <script>
   import { onMount } from 'svelte';
+  import { createClient } from '@supabase/supabase-js';
+  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { Plus, Search, Edit, Trash2, Eye, EyeOff, Calendar, User } from 'lucide-svelte';
-  import { supabase } from '$lib/supabase/client';
+  
+  // Initialize Supabase
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL,
+    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+  );
   
   // State variables with explicit types
   let userNotes = /** @type {any[]} */ ([]);

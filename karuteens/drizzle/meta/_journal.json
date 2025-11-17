@@ -15,6 +15,34 @@
       "when": 1762374414195,
       "tag": "0001_boring_vertigo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762375000000,
+      "tag": "0002_pages_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762376000000,
+      "tag": "0003_events_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762380000000,
+      "tag": "0004_sessions_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1762385000000,
+      "tag": "0005_notifications_table",
+      "breakpoints": true
     }
   ]
 }

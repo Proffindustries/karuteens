@@ -260,7 +260,20 @@ export type InsertEvent = typeof events.$inferInsert;
 export type EventAttendee = typeof eventAttendees.$inferSelect;
 export type InsertEventAttendee = typeof eventAttendees.$inferInsert;
 
-// Campus Resources
+// Event comments
+export const eventComments = pgTable('event_comments', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
+	userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+	content: text('content').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type EventComment = typeof eventComments.$inferSelect;
+export type InsertEventComment = typeof eventComments.$inferInsert;
+
+// Campus Resources postgresql://postgres:[YOUR_PASSWORD]@db.pwylmgeuqceldkwhufbo.supabase.co:5432/postgres
 export const campusResources = pgTable('campus_resources', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	name: text('name').notNull(),
@@ -368,7 +381,7 @@ export type InsertContentComment = typeof contentComments.$inferInsert;
 export const reports = pgTable('reports', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	reporterId: uuid('reporter_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
-	reportType: text('report_type').notNull(), // 'user', 'content', 'technical'
+	reportType: text('report_type').notNull(), // ' 'user', 'content', 'technical'
 	targetId: text('target_id'),
 	reason: text('reason').notNull(),
 	description: text('description').notNull(),
@@ -379,6 +392,22 @@ export const reports = pgTable('reports', {
 
 export type Report = typeof reports.$inferSelect;
 export type InsertReport = typeof reports.$inferInsert;
+
+// Notifications table
+export const notifications = pgTable('notifications', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+	type: text('type').notNull(), // 'comment', 'like', 'mention', 'event', 'follow', 'message'
+	title: text('title').notNull(),
+	message: text('message').notNull(),
+	read: boolean('read').default(false).notNull(),
+	avatarUrl: text('avatar_url'),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
 
 // Notes
 export const notes = pgTable('notes', {
@@ -394,3 +423,18 @@ export const notes = pgTable('notes', {
 
 export type Note = typeof notes.$inferSelect;
 export type InsertNote = typeof notes.$inferInsert;
+
+// Sessions for authentication
+export const sessions = pgTable('sessions', {
+	id: text('id').primaryKey(),
+	userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = typeof sessions.$inferInsert;
+
+
+
+
