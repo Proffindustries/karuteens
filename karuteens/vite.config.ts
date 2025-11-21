@@ -18,7 +18,6 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				manualChunks: {
-					vendor: ['@supabase/supabase-js', '@supabase/ssr'],
 					ui: ['lucide-svelte']
 				}
 			}
