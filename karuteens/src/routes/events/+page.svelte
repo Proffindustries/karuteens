@@ -31,6 +31,12 @@
   let uploading = false;
   let coverFile: File | null = null;
   let coverPreview: string | null = null;
+  
+  // Pagination variables
+  let page = 1;
+  let pageSize = 12;
+  let hasMore = true;
+  let loadingMore = false;
 
   const categories = ['Academic', 'Social', 'Sports', 'Workshop', 'Career', 'Other'];
 
@@ -55,14 +61,24 @@
   async function loadEvents() {
     try {
       // Use our API instead of Supabase directly
-      const response = await fetch('/api/events');
+      const response = await fetch(`/api/events?limit=${pageSize}&offset=${(page - 1) * pageSize}`);
       const result = await response.json();
       
       if (result.success) {
-        events = result.data.map((e: any) => ({
+        const newEvents = result.data.map((e: any) => ({
           ...e,
           attendee_count: 0 // We'll need to get this from our API or add it later
         }));
+        
+        // If we're loading more events, append them to existing events
+        if (page > 1) {
+          events = [...events, ...newEvents];
+        } else {
+          events = newEvents;
+        }
+        
+        // Check if we have more events to load
+        hasMore = result.data.length === pageSize;
       }
     } catch (error) {
       console.error('Error loading events:', error);
@@ -72,25 +88,46 @@
         .select('*, event_attendees(count)')
         .eq('is_public', true)
         .gte('start_time', new Date().toISOString())
-        .order('start_time', { ascending: true });
+        .order('start_time', { ascending: true })
+        .range((page - 1) * pageSize, page * pageSize - 1);
       
       if (data) {
-        events = data.map(e => ({
+        const newEvents = data.map(e => ({
           ...e,
           attendee_count: e.event_attendees?.[0]?.count || 0
         }));
+        
+        // If we're loading more events, append them to existing events
+        if (page > 1) {
+          events = [...events, ...newEvents];
+        } else {
+          events = newEvents;
+        }
+        
+        // Check if we have more events to load
+        hasMore = data.length === pageSize;
       }
     }
+    
+    loadingMore = false;
   }
 
-  function handleCoverSelect(e: Event) {
+  async function loadMoreEvents() {
+    if (!hasMore || loadingMore) return;
+    
+    loadingMore = true;
+    page++;
+    await loadEvents();
+  }
+
+  function handleCoverSelect(e: any) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     coverFile = file;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      coverPreview = ev.target?.result as string;
+      coverPreview = (ev.target as FileReader).result as string;
     };
     reader.readAsDataURL(file);
   }
@@ -282,11 +319,29 @@
         </a>
       {/each}
     </section>
+    
+    <!-- Load More Button -->
+    {#if hasMore}
+      <div class="flex justify-center py-6">
+        <button 
+          class="px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+          on:click={loadMoreEvents}
+          disabled={loadingMore}
+        >
+          {#if loadingMore}
+            <div class="animate-spin size-5 border-2 border-white border-t-transparent rounded-full"></div>
+            Loading...
+          {:else}
+            Load More Events
+          {/if}
+        </button>
+      </div>
+    {/if}
   {/if}
 
   {#if showCreate}
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" on:click={() => showCreate = false}>
-      <div class="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 my-8" on:click|stopPropagation>
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="create-event-title" tabindex="-1" on:keydown={(e) => e.key === 'Escape' && (showCreate = false)}>
+      <div class="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 my-8" role="document">
         <div class="flex items-center justify-between">
           <h2 class="text-2xl font-bold">Create Event</h2>
           <button class="p-2 hover:bg-gray-100 rounded-lg" on:click={() => showCreate = false}>
@@ -296,19 +351,19 @@
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium mb-1">Event Title *</label>
-            <input class="w-full rounded-lg border px-4 py-2" bind:value={form.title} placeholder="e.g. Study Group Session" />
+            <label for="event-title" class="block text-sm font-medium mb-1">Event Title *</label>
+            <input id="event-title" class="w-full rounded-lg border px-4 py-2" bind:value={form.title} placeholder="e.g. Study Group Session" />
           </div>
           
           <div>
-            <label class="block text-sm font-medium mb-1">Description</label>
-            <textarea class="w-full rounded-lg border px-4 py-2 resize-none" rows="3" bind:value={form.description} placeholder="Describe your event" />
+            <label for="event-description" class="block text-sm font-medium mb-1">Description</label>
+            <textarea id="event-description" class="w-full rounded-lg border px-4 py-2 resize-none" rows="3" bind:value={form.description} placeholder="Describe your event"></textarea>
           </div>
 
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium mb-1">Category *</label>
-              <select class="w-full rounded-lg border px-4 py-2" bind:value={form.category}>
+              <label for="event-category" class="block text-sm font-medium mb-1">Category *</label>
+              <select id="event-category" class="w-full rounded-lg border px-4 py-2" bind:value={form.category}>
                 {#each categories as cat}
                   <option value={cat}>{cat}</option>
                 {/each}
@@ -316,8 +371,8 @@
             </div>
             
             <div>
-              <label class="block text-sm font-medium mb-1">Max Attendees</label>
-              <input type="number" class="w-full rounded-lg border px-4 py-2" bind:value={form.maxAttendees} placeholder="Optional" />
+              <label for="max-attendees" class="block text-sm font-medium mb-1">Max Attendees</label>
+              <input type="number" id="max-attendees" class="w-full rounded-lg border px-4 py-2" bind:value={form.maxAttendees} placeholder="Optional" />
             </div>
           </div>
 
@@ -328,30 +383,30 @@
 
           {#if form.isOnline}
             <div>
-              <label class="block text-sm font-medium mb-1">Meeting URL</label>
-              <input class="w-full rounded-lg border px-4 py-2" bind:value={form.meetingUrl} placeholder="https://..." />
+              <label for="meeting-url" class="block text-sm font-medium mb-1">Meeting URL</label>
+              <input id="meeting-url" class="w-full rounded-lg border px-4 py-2" bind:value={form.meetingUrl} placeholder="https://..." />
             </div>
           {:else}
             <div>
-              <label class="block text-sm font-medium mb-1">Location</label>
-              <input class="w-full rounded-lg border px-4 py-2" bind:value={form.location} placeholder="Enter venue or address" />
+              <label for="event-location" class="block text-sm font-medium mb-1">Location</label>
+              <input id="event-location" class="w-full rounded-lg border px-4 py-2" bind:value={form.location} placeholder="Enter venue or address" />
             </div>
           {/if}
 
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium mb-1">Start Time *</label>
-              <input type="datetime-local" class="w-full rounded-lg border px-4 py-2" bind:value={form.startTime} />
+              <label for="start-time" class="block text-sm font-medium mb-1">Start Time *</label>
+              <input type="datetime-local" id="start-time" class="w-full rounded-lg border px-4 py-2" bind:value={form.startTime} />
             </div>
             
             <div>
-              <label class="block text-sm font-medium mb-1">End Time</label>
-              <input type="datetime-local" class="w-full rounded-lg border px-4 py-2" bind:value={form.endTime} />
+              <label for="end-time" class="block text-sm font-medium mb-1">End Time</label>
+              <input type="datetime-local" id="end-time" class="w-full rounded-lg border px-4 py-2" bind:value={form.endTime} />
             </div>
           </div>
 
           <div class="space-y-2">
-            <label class="block text-sm font-medium">Cover Image</label>
+            <label for="cover-image" class="block text-sm font-medium">Cover Image</label>
             {#if coverPreview}
               <div class="relative w-full h-40 rounded-lg overflow-hidden border">
                 <img src={coverPreview} alt="Cover" class="w-full h-full object-cover" />
@@ -360,8 +415,8 @@
                 </button>
               </div>
             {/if}
-            <label class="px-3 py-2 rounded-lg border hover:bg-gray-100 cursor-pointer inline-flex items-center gap-2">
-              <input type="file" class="hidden" accept="image/*" on:change={handleCoverSelect} />
+            <label for="cover-image" class="px-3 py-2 rounded-lg border hover:bg-gray-100 cursor-pointer inline-flex items-center gap-2">
+              <input type="file" id="cover-image" class="hidden" accept="image/*" on:change={handleCoverSelect} />
               <ImageIcon class="size-5" />
               <span class="text-sm">{coverPreview ? 'Change' : 'Upload'} Cover</span>
             </label>

@@ -3,6 +3,7 @@
 	import { user } from '$lib/stores/auth';
 	import { supabase } from '$lib/supabase/client';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
 	let open = false;
 	const links = [
@@ -18,6 +19,20 @@
 		{ href: '/settings', label: 'Settings' },
 		{ href: '/map', label: 'Site Map' }
 	];
+
+	// Prefetch critical routes
+	onMount(() => {
+		// Preload critical routes for faster navigation
+		if (typeof window !== 'undefined') {
+			const prefetchLinks = ['/feed', '/profile', '/groups'];
+			prefetchLinks.forEach(href => {
+				const link = document.createElement('link');
+				link.rel = 'prefetch';
+				link.href = href;
+				document.head.appendChild(link);
+			});
+		}
+	});
 
 	function toggle() {
 		open = !open;

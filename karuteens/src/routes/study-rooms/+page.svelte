@@ -3,27 +3,24 @@
   import { supabase } from '$lib/supabase/client';
   import { user } from '$lib/stores/auth';
   import { Search, Plus, Users, CalendarDays, BookOpen, X } from 'lucide-svelte';
+  import type { StudyRoom } from '$lib/types/study-room';
   
-  type Room = {
-    id: string;
+  interface RoomFormData {
     title: string;
     subject: string;
-    description?: string;
-    host_id: string;
-    is_public: boolean;
-    scheduled_at?: string;
-    max_members: number;
-    created_at: string;
-    member_count?: number;
-  };
+    description: string;
+    isPublic: boolean;
+    scheduledAt: string;
+    maxMembers: number;
+  }
   
   let loading = true;
-  let rooms: Room[] = [];
+  let rooms: StudyRoom[] = [];
   let searchQuery = '';
   let showCreateModal = false;
   let creating = false;
   
-  let form = {
+  let form: RoomFormData = {
     title: '',
     subject: '',
     description: '',
@@ -45,7 +42,7 @@
     
     if (data) {
       const withCounts = await Promise.all(
-        data.map(async (r) => {
+        data.map(async (r: StudyRoom) => {
           const { count } = await supabase
             .from('study_room_members')
             .select('*', { count: 'exact', head: true })
@@ -64,32 +61,61 @@
   );
   
   async function createRoom() {
-    if (!$user) { window.location.href = '/login'; return; }
-    if (!form.title || !form.subject) return;
     creating = true;
-    
-    const { data: room, error } = await supabase
-      .from('study_rooms')
-      .insert({
-        title: form.title,
-        subject: form.subject,
-        description: form.description || null,
-        is_public: form.isPublic,
-        scheduled_at: form.scheduledAt || null,
-        max_members: form.maxMembers,
-        host_id: $user.id
-      })
-      .select()
-      .single();
-    
-    if (error) { alert(error.message); creating = false; return; }
-    
-    // Add host as first member
-    await supabase
-      .from('study_room_members')
-      .insert({ room_id: room.id, user_id: $user.id, role: 'host' });
-    
-    window.location.href = `/study-rooms/${room.id}`;
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('Not authenticated');
+
+      const { data: room, error } = await supabase
+        .from('study_rooms')
+        .insert([
+          {
+            title: form.title,
+            subject: form.subject,
+            description: form.description || null,
+            is_public: form.isPublic,
+            scheduled_at: form.scheduledAt || null,
+            max_members: form.maxMembers,
+            user_id: currentUser.id
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Add creator as a member with host role
+      const { error: memberError } = await supabase
+        .from('study_room_members')
+        .insert([
+          {
+            room_id: room.id,
+            user_id: currentUser.id,
+            role: 'host'
+          }
+        ]);
+
+      if (memberError) throw memberError;
+
+      // Reset form and close modal
+      showCreateModal = false;
+      form = {
+        title: '',
+        subject: '',
+        description: '',
+        isPublic: true,
+        scheduledAt: '',
+        maxMembers: 10
+      };
+      
+      // Redirect to the new room
+      window.location.href = `/study-rooms/${room.id}`;
+    } catch (error) {
+      console.error('Error creating room:', error);
+      alert(error instanceof Error ? error.message : 'Failed to create room');
+    } finally {
+      creating = false;
+    }
   }
   
   async function joinRoom(roomId: string) {
@@ -178,40 +204,77 @@
   
   <!-- Create Modal -->
   {#if showCreateModal}
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={() => showCreateModal = false}>
+    <div role="dialog" aria-modal="true" aria-labelledby="create-room-title" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={() => showCreateModal = false}>
       <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4" on:click|stopPropagation>
         <div class="flex items-center justify-between">
-          <h2 class="text-2xl font-bold">Create Study Room</h2>
+          <h2 id="create-room-title" class="text-2xl font-bold">Create Study Room</h2>
           <button class="p-2 hover:bg-gray-100 rounded-lg" on:click={() => showCreateModal = false}>
             <X class="size-5" />
           </button>
         </div>
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium mb-1">Title *</label>
-            <input class="w-full rounded-lg border px-4 py-2" bind:value={form.title} placeholder="e.g. Calculus Revision" />
+            <label for="room-title" class="block text-sm font-medium mb-1">Title *</label>
+            <input 
+              id="room-title"
+              class="w-full rounded-lg border px-4 py-2" 
+              bind:value={form.title} 
+              placeholder="e.g. Calculus Revision"
+              required
+            />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Subject *</label>
-            <input class="w-full rounded-lg border px-4 py-2" bind:value={form.subject} placeholder="e.g. MTH101" />
+            <label for="room-subject" class="block text-sm font-medium mb-1">Subject *</label>
+            <input 
+              id="room-subject"
+              class="w-full rounded-lg border px-4 py-2" 
+              bind:value={form.subject} 
+              placeholder="e.g. MTH101"
+              required
+            />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Description</label>
-            <textarea class="w-full rounded-lg border px-4 py-2 resize-none" rows="3" bind:value={form.description} placeholder="What will be covered?" />
+            <label for="room-description" class="block text-sm font-medium mb-1">Description</label>
+            <textarea 
+              id="room-description"
+              class="w-full rounded-lg border px-4 py-2 resize-none" 
+              rows={3} 
+              bind:value={form.description} 
+              placeholder="What will be covered?"
+            ></textarea>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-sm font-medium mb-1">Scheduled Time</label>
-              <input type="datetime-local" class="w-full rounded-lg border px-4 py-2" bind:value={form.scheduledAt} />
+              <label for="room-schedule" class="block text-sm font-medium mb-1">Scheduled Time</label>
+              <input 
+                id="room-schedule"
+                type="datetime-local" 
+                class="w-full rounded-lg border px-4 py-2" 
+                bind:value={form.scheduledAt} 
+              />
             </div>
             <div>
-              <label class="block text-sm font-medium mb-1">Max Members</label>
-              <input type="number" min="2" max="50" class="w-full rounded-lg border px-4 py-2" bind:value={form.maxMembers} />
+              <label for="room-max-members" class="block text-sm font-medium mb-1">Max Members</label>
+              <input 
+                id="room-max-members"
+                type="number" 
+                min="2" 
+                max="50" 
+                class="w-full rounded-lg border px-4 py-2" 
+                bind:value={form.maxMembers} 
+              />
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <input type="checkbox" id="public-room" class="rounded" bind:checked={form.isPublic} />
-            <label for="public-room" class="text-sm">Public room</label>
+            <div class="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="public-room" 
+                class="rounded" 
+                bind:checked={form.isPublic} 
+              />
+              <label for="public-room" class="text-sm">Public room</label>
+            </div>
           </div>
         </div>
         <div class="flex gap-3 pt-2">

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { user } from '$lib/stores/auth';
   import { supabase } from '$lib/supabase/client';
-  import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, Trash2, MoreVertical, FileText, Music, Video } from 'lucide-svelte';
+  import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, Trash2, MoreVertical, FileText, Music, Video, Reply, Smile } from 'lucide-svelte';
   
   let posts: any[] = [];
   let draft = '';
@@ -17,12 +17,38 @@
   let likedByMe: Record<string, boolean> = {};
   let comments: Record<string, any[]> = {};
   let commentsLoading: Record<string, boolean> = {};
+  let replies: Record<string, Record<string, any[]>> = {}; // postId -> commentId -> replies[]
+  let replyText: Record<string, Record<string, string>> = {}; // postId -> commentId -> text
+  let showReplyForm: Record<string, Record<string, boolean>> = {}; // postId -> commentId -> boolean
+  let commentReactions: Record<string, Record<string, { count: number, reacted: boolean }>> = {}; // postId -> commentId -> reactions
+  
+  // Pagination variables
+  let page = 1;
+  let pageSize = 10;
+  let hasMore = true;
+  let loadingMore = false;
+  
+  // Real-time subscription
+  let postsChannel: any = null;
   
   onMount(async () => {
     await loadPosts();
     await loadReactionsForPosts();
     subscribeToNewPosts();
     loading = false;
+    
+    // Add scroll listener for infinite scroll
+    window.addEventListener('scroll', handleScroll);
+  });
+  
+  onDestroy(() => {
+    // Clean up subscription
+    if (postsChannel) {
+      supabase.removeChannel(postsChannel);
+    }
+    
+    // Remove scroll listener
+    window.removeEventListener('scroll', handleScroll);
   });
   
   async function loadPosts() {
@@ -33,10 +59,40 @@
         profiles!posts_author_id_fkey(id, username, avatar_url)
       `)
       .order('created_at', { ascending: false })
-      .limit(50);
+      .range((page - 1) * pageSize, page * pageSize - 1);
     
     if (data) {
-      posts = data;
+      // If we're loading more posts, append them to existing posts
+      if (page > 1) {
+        posts = [...posts, ...data];
+      } else {
+        posts = data;
+      }
+      
+      // Check if we have more posts to load
+      hasMore = data.length === pageSize;
+    }
+    
+    loadingMore = false;
+  }
+
+  async function loadMorePosts() {
+    if (!hasMore || loadingMore) return;
+    
+    loadingMore = true;
+    page++;
+    await loadPosts();
+  }
+
+  function handleScroll() {
+    // Check if user has scrolled to bottom of page
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const windowHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    
+    // If user is near bottom of page, load more posts
+    if (scrollTop + windowHeight >= documentHeight - 1000) {
+      loadMorePosts();
     }
   }
 
@@ -71,7 +127,7 @@
   }
   
   function subscribeToNewPosts() {
-    supabase
+    postsChannel = supabase
       .channel('posts-channel')
       .on(
         'postgres_changes',
@@ -84,7 +140,10 @@
             .single();
           
           if (data) {
-            posts = [data, ...posts];
+            // Only add to beginning if we're on the first page
+            if (page === 1) {
+              posts = [data, ...posts];
+            }
           }
         }
       )
@@ -254,11 +313,97 @@
     commentsLoading[postId] = true;
     const { data } = await supabase
       .from('comments')
-      .select('id, post_id, user_id, content, created_at')
+      .select(`
+        id, 
+        post_id, 
+        user_id, 
+        content, 
+        created_at,
+        parentId,
+        profiles!comments_user_id_fkey(id, username, avatar_url)
+      `)
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
-    comments[postId] = data || [];
+    
+    if (data) {
+      // Separate top-level comments from replies
+      const topLevelComments = data.filter(c => !c.parentId);
+      const replyComments = data.filter(c => c.parentId);
+      
+      comments[postId] = topLevelComments;
+      
+      // Group replies by parent comment
+      const groupedReplies: Record<string, any[]> = {};
+      replyComments.forEach(reply => {
+        if (reply.parentId) {
+          if (!groupedReplies[reply.parentId]) {
+            groupedReplies[reply.parentId] = [];
+          }
+          groupedReplies[reply.parentId].push(reply);
+        }
+      });
+      
+      replies[postId] = groupedReplies;
+      
+      // Load reactions for all comments
+      await loadCommentReactions(postId, data.map(c => c.id));
+    }
+    
     commentsLoading[postId] = false;
+  }
+
+  async function loadCommentReactions(postId: string, commentIds: string[]) {
+    if (commentIds.length === 0) return;
+    
+    // Load counts
+    const { data: reactionsData } = await supabase
+      .from('comment_reactions')
+      .select('comment_id')
+      .in('comment_id', commentIds);
+    
+    if (reactionsData) {
+      const counts: Record<string, number> = {};
+      for (const r of reactionsData as any[]) {
+        counts[r.comment_id] = (counts[r.comment_id] || 0) + 1;
+      }
+      
+      // Initialize reactions object for this post if not exists
+      if (!commentReactions[postId]) {
+        commentReactions[postId] = {};
+      }
+      
+      // Set counts
+      commentIds.forEach(commentId => {
+        if (!commentReactions[postId][commentId]) {
+          commentReactions[postId][commentId] = { count: 0, reacted: false };
+        }
+        commentReactions[postId][commentId].count = counts[commentId] || 0;
+      });
+    }
+    
+    // Load my reactions
+    if ($user) {
+      const { data: myReactions } = await supabase
+        .from('comment_reactions')
+        .select('comment_id')
+        .eq('user_id', $user.id)
+        .in('comment_id', commentIds);
+      
+      if (myReactions) {
+        // Initialize reactions object for this post if not exists
+        if (!commentReactions[postId]) {
+          commentReactions[postId] = {};
+        }
+        
+        // Set reacted status
+        myReactions.forEach((r: any) => {
+          if (!commentReactions[postId][r.comment_id]) {
+            commentReactions[postId][r.comment_id] = { count: 0, reacted: false };
+          }
+          commentReactions[postId][r.comment_id].reacted = true;
+        });
+      }
+    }
   }
 
   async function addComment(postId: string) {
@@ -274,7 +419,8 @@
       user_id: $user.id,
       content: text,
       created_at: new Date().toISOString(),
-      _optimistic_profile: {
+      parentId: null,
+      profiles: {
         username: $user.user_metadata?.username || $user.email,
         avatar_url: $user.user_metadata?.avatar_url
       }
@@ -293,6 +439,116 @@
       // reload to get server IDs and normalized rows
       void loadComments(postId);
     }
+  }
+
+  function toggleReplyForm(postId: string, commentId: string) {
+    if (!showReplyForm[postId]) {
+      showReplyForm[postId] = {};
+    }
+    showReplyForm[postId][commentId] = !showReplyForm[postId][commentId];
+    
+    // Initialize replyText if not exists
+    if (!replyText[postId]) {
+      replyText[postId] = {};
+    }
+    if (!replyText[postId][commentId]) {
+      replyText[postId][commentId] = '';
+    }
+  }
+
+  async function addReply(postId: string, commentId: string) {
+    const text = (replyText[postId]?.[commentId] || '').trim();
+    if (!text) return;
+    if (!$user) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    const optimistic = {
+      id: `temp-${Date.now()}`,
+      post_id: postId,
+      user_id: $user.id,
+      content: text,
+      created_at: new Date().toISOString(),
+      parentId: commentId,
+      profiles: {
+        username: $user.user_metadata?.username || $user.email,
+        avatar_url: $user.user_metadata?.avatar_url
+      }
+    };
+    
+    // Add to replies
+    if (!replies[postId]) {
+      replies[postId] = {};
+    }
+    if (!replies[postId][commentId]) {
+      replies[postId][commentId] = [];
+    }
+    replies[postId][commentId] = [...replies[postId][commentId], optimistic];
+    
+    // Clear input
+    if (replyText[postId]) {
+      replyText[postId][commentId] = '';
+    }
+    
+    const { error } = await supabase
+      .from('comments')
+      .insert({ 
+        post_id: postId, 
+        user_id: $user.id, 
+        content: text,
+        parent_id: commentId
+      });
+      
+    if (error) {
+      // rollback optimistic
+      replies[postId][commentId] = replies[postId][commentId].filter((c) => c.id !== optimistic.id);
+      if (replyText[postId]) {
+        replyText[postId][commentId] = text;
+      }
+      alert('Failed to add reply');
+    } else {
+      // reload to get server IDs and normalized rows
+      void loadComments(postId);
+    }
+  }
+
+  async function toggleCommentReaction(postId: string, commentId: string) {
+    if (!$user) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    // Initialize reactions object for this post if not exists
+    if (!commentReactions[postId]) {
+      commentReactions[postId] = {};
+    }
+    if (!commentReactions[postId][commentId]) {
+      commentReactions[postId][commentId] = { count: 0, reacted: false };
+    }
+    
+    const reacted = commentReactions[postId][commentId].reacted;
+    
+    try {
+      if (reacted) {
+        await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', $user.id);
+      } else {
+        await supabase
+          .from('comment_reactions')
+          .insert({ comment_id: commentId, user_id: $user.id, reaction_type: 'like' });
+      }
+    } finally {
+      // Reload reactions for this comment
+      await loadCommentReactions(postId, [commentId]);
+    }
+  }
+
+  function getAvatarUrl(profile: any) {
+    return profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.username || 'U'}`;
   }
 </script>
 
@@ -435,10 +691,12 @@
               {#if post.image_url.includes('/images/')}
                 <img src={post.image_url} alt="Post" class="w-full max-h-[500px] object-cover" />
               {:else if post.image_url.includes('/videos/')}
-                <video src={post.image_url} controls class="w-full max-h-[500px]" />
+                <video src={post.image_url} controls class="w-full max-h-[500px]">
+                  <track kind="captions" />
+                </video>
               {:else if post.image_url.includes('/audio/')}
                 <div class="p-6 bg-gradient-to-r from-purple-100 to-pink-100">
-                  <audio src={post.image_url} controls class="w-full" />
+                  <audio src={post.image_url} controls class="w-full"></audio>
                 </div>
               {:else if post.image_url.includes('/documents/')}
                 <a 
@@ -507,37 +765,122 @@
                     {#each (comments[post.id] || []) as c (c.id)}
                       <div class="flex items-start gap-3">
                         <img src={c.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${c.profiles?.username || 'U'}`} alt={c.profiles?.username} class="size-8 rounded-full" />
-                        <div class="bg-gray-50 rounded-xl px-4 py-2">
-                          <div class="text-sm font-semibold">{c.profiles?.username || 'Unknown'}</div>
-                          <div class="text-sm text-gray-800">{c.content}</div>
-                          <div class="text-xs text-gray-500 mt-1">{formatTime(c.created_at)}</div>
+                        <div class="flex-1">
+                          <div class="bg-gray-50 rounded-xl px-4 py-2">
+                            <div class="text-sm font-semibold">{c.profiles?.username || 'Unknown'}</div>
+                            <div class="text-sm text-gray-800">{c.content}</div>
+                            <div class="text-xs text-gray-500 mt-1">{formatTime(c.created_at)}</div>
+                          </div>
+                          
+                          <!-- Comment actions -->
+                          <div class="flex items-center gap-4 mt-2 ml-4">
+                            <button 
+                              class="flex items-center gap-1 text-xs {commentReactions[post.id]?.[c.id]?.reacted ? 'text-red-600' : 'text-gray-500 hover:text-red-500'}"
+                              on:click={() => toggleCommentReaction(post.id, c.id)}
+                            >
+                              <Heart class="size-4" />
+                              <span>{commentReactions[post.id]?.[c.id]?.count || 0}</span>
+                            </button>
+                            <button 
+                              class="text-xs text-gray-500 hover:text-blue-500"
+                              on:click={() => toggleReplyForm(post.id, c.id)}
+                            >
+                              <Reply class="size-4 inline mr-1" />
+                              Reply
+                            </button>
+                          </div>
+                          
+                          <!-- Reply form -->
+                          {#if showReplyForm[post.id]?.[c.id]}
+                            <div class="mt-2 ml-4 flex items-center gap-2">
+                              <input 
+                                type="text" 
+                                value={replyText[post.id]?.[c.id] || ''}
+                                placeholder="Write a reply..."
+                                class="flex-1 rounded-full border border-gray-300 px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                on:input={(e) => {
+                                  const target = e.target as HTMLInputElement;
+                                  if (!replyText[post.id]) replyText[post.id] = {};
+                                  replyText[post.id][c.id] = target.value;
+                                }}
+                                on:keydown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    addReply(post.id, c.id);
+                                  }
+                                }}
+                              />
+                              <button 
+                                class="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                on:click={() => addReply(post.id, c.id)}
+                                disabled={!replyText[post.id]?.[c.id] || !replyText[post.id]?.[c.id].trim()}
+                              >
+                                <Send class="size-3" />
+                              </button>
+                            </div>
+                          {/if}
+                          
+                          <!-- Replies -->
+                          {#if replies[post.id]?.[c.id] && replies[post.id][c.id].length > 0}
+                            <div class="mt-2 ml-4 space-y-2 border-l-2 border-gray-200 pl-3">
+                              {#each replies[post.id][c.id] as reply (reply.id)}
+                                <div class="flex items-start gap-2">
+                                  <img src={reply.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${reply.profiles?.username || 'U'}`} alt={reply.profiles?.username} class="size-6 rounded-full" />
+                                  <div class="flex-1">
+                                    <div class="bg-gray-100 rounded-lg px-3 py-1">
+                                      <div class="text-xs font-semibold">{reply.profiles?.username || 'Unknown'}</div>
+                                      <div class="text-xs text-gray-800">{reply.content}</div>
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1">{formatTime(reply.created_at)}</div>
+                                  </div>
+                                </div>
+                              {/each}
+                            </div>
+                          {/if}
                         </div>
                       </div>
                     {/each}
                   </div>
+                  
+                  <!-- Add comment input -->
+                  <div class="flex items-center gap-2 pt-2">
+                    <input 
+                      type="text" 
+                      bind:value={commentText[post.id]}
+                      placeholder="Write a comment..."
+                      class="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button 
+                      class="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      on:click={() => addComment(post.id)}
+                      disabled={!commentText[post.id] || !commentText[post.id].trim()}
+                    >
+                      <Send class="size-4" />
+                    </button>
+                  </div>
                 {/if}
-                
-                <!-- Add comment input -->
-                <div class="flex items-center gap-2 pt-2">
-                  <input 
-                    type="text" 
-                    bind:value={commentText[post.id]}
-                    placeholder="Write a comment..."
-                    class="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <button 
-                    class="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                    on:click={() => addComment(post.id)}
-                    disabled={!commentText[post.id] || !commentText[post.id].trim()}
-                  >
-                    <Send class="size-4" />
-                  </button>
-                </div>
               </div>
             {/if}
           </article>
         {/each}
       </div>
+      
+      <!-- Load More Button -->
+      {#if hasMore}
+        <div class="flex justify-center py-6">
+          <button 
+            class="px-6 py-3 rounded-full bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            on:click={loadMorePosts}
+            disabled={loadingMore}
+          >
+            {#if loadingMore}
+              <div class="animate-spin size-5 border-2 border-white border-t-transparent rounded-full"></div>
+              Loading...
+            {:else}
+              Load More Posts
+            {/if}
+          </button>
+        </div>
+      {/if}
     {/if}
   </div>
 </main>

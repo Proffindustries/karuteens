@@ -3,6 +3,7 @@
   import { supabase } from '$lib/supabase/client';
   import { env as pub } from '$env/dynamic/public';
   import { goto } from '$app/navigation';
+  import { Shield } from 'lucide-svelte';
 
   let loading = true;
   let isAuthorized = false;
@@ -108,65 +109,109 @@
       {/if}
     </div>
   {:else}
-    <section class="space-y-4">
-      <h2 class="text-xl font-semibold">Media Uploads</h2>
-      <p class="text-sm text-foreground/70">Upload images, videos, and other files to Supabase Storage.</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-xl font-semibold mb-4">Media Uploads</h2>
+        <p class="text-sm text-foreground/70 mb-4">Upload images, videos, and other files to Supabase Storage.</p>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="block space-y-1">
-          <span class="text-sm">Bucket</span>
-          <input class="input" placeholder="e.g. public, media, assets" bind:value={bucket} />
-        </label>
+        <div class="space-y-4">
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="block space-y-1">
+              <span class="text-sm">Bucket</span>
+              <input class="input" placeholder="e.g. public, media, assets" bind:value={bucket} />
+            </label>
 
-        <label class="block space-y-1">
-          <span class="text-sm">Destination path/prefix (optional)</span>
-          <input class="input" placeholder="e.g. uploads/2025/11" bind:value={prefix} />
-        </label>
-      </div>
+            <label class="block space-y-1">
+              <span class="text-sm">Destination path/prefix (optional)</span>
+              <input class="input" placeholder="e.g. uploads/2025/11" bind:value={prefix} />
+            </label>
+          </div>
 
-      <div class="flex items-center gap-4">
-        <label class="inline-flex items-center gap-2 text-sm">
-          <input type="checkbox" bind:checked={makePublic} />
-          Make public (generate public URLs)
-        </label>
-      </div>
+          <div class="flex items-center gap-4">
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" bind:checked={makePublic} />
+              Make public (generate public URLs)
+            </label>
+          </div>
 
-      <div class="space-y-2">
-        <input type="file" multiple on:change={(e: Event) => { files = (e.target as HTMLInputElement).files; }} />
-        <button class="px-3 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50" on:click={handleUpload} disabled={uploading}>
-          {uploading ? 'Uploading…' : 'Upload'}
-        </button>
-      </div>
+          <div class="space-y-2">
+            <input type="file" multiple on:change={(e: Event) => { files = (e.target as HTMLInputElement).files; }} />
+            <button class="px-3 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50" on:click={handleUpload} disabled={uploading}>
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
+          </div>
 
-      {#if results.length}
-        <div class="space-y-2">
-          <h3 class="font-medium">Results</h3>
-          <ul class="space-y-2">
-            {#each results as r}
-              <li class="rounded border p-3 bg-white">
-                {#if r.error}
-                  <div class="text-red-600 text-sm">{r.file}: {r.error}</div>
-                {:else}
-                  <div class="text-sm">
-                    <div><span class="text-foreground/60">Stored at:</span> <code>{r.path}</code></div>
-                    {#if r.publicUrl}
-                      <div class="flex items-center gap-2 break-all">
-                        <span class="text-foreground/60">Public URL:</span>
-                        <a class="text-blue-600 hover:underline" href={r.publicUrl} target="_blank" rel="noreferrer">{r.publicUrl}</a>
-                        <button class="px-2 py-1 text-xs rounded border" on:click={() => copy(r.publicUrl!)}>Copy</button>
+          {#if results.length}
+            <div class="space-y-2">
+              <h3 class="font-medium">Results</h3>
+              <ul class="space-y-2">
+                {#each results as r}
+                  <li class="rounded border p-3 bg-white">
+                    {#if r.error}
+                      <div class="text-red-600 text-sm">{r.file}: {r.error}</div>
+                    {:else}
+                      <div class="text-sm">
+                        <div><span class="text-foreground/60">Stored at:</span> <code>{r.path}</code></div>
+                        {#if r.publicUrl}
+                          <div class="flex items-center gap-2 break-all">
+                            <span class="text-foreground/60">Public URL:</span>
+                            <a class="text-blue-600 hover:underline" href={r.publicUrl} target="_blank" rel="noreferrer">{r.publicUrl}</a>
+                            <button class="px-2 py-1 text-xs rounded border" on:click={() => copy(r.publicUrl!)}>Copy</button>
+                          </div>
+                        {/if}
                       </div>
                     {/if}
-                  </div>
-                {/if}
-              </li>
-            {/each}
-          </ul>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
         </div>
-      {/if}
+      </section>
 
-      <div class="text-xs text-foreground/60">
-        Tip: For stronger security, enforce admin-only access in server code and Supabase RLS, and ensure the admin account uses a 72-character password.
-      </div>
-    </section>
+      <section class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-xl font-semibold mb-4">Moderation</h2>
+        <p class="text-sm text-foreground/70 mb-4">Manage reports, content flags, and user appeals.</p>
+        
+        <div class="space-y-4">
+          <a 
+            href="/admin/moderation" 
+            class="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-red-100 rounded-lg">
+                <Shield class="size-6 text-red-600"></Shield>
+              </div>
+              <div>
+                <h3 class="font-medium">Moderation Dashboard</h3>
+                <p class="text-sm text-gray-600">Review reports, flags, and appeals</p>
+              </div>
+            </div>
+          </a>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <a 
+              href="/admin/moderation#reports" 
+              class="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center"
+            >
+              <h4 class="font-medium text-sm">Reports</h4>
+              <p class="text-xs text-gray-600 mt-1">User submitted reports</p>
+            </a>
+            
+            <a 
+              href="/admin/moderation#flags" 
+              class="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center"
+            >
+              <h4 class="font-medium text-sm">Auto Flags</h4>
+              <p class="text-xs text-gray-600 mt-1">AI detected content</p>
+            </a>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="text-xs text-foreground/60">
+      Tip: For stronger security, enforce admin-only access in server code and Supabase RLS, and ensure the admin account uses a 72-character password.
+    </div>
   {/if}
 </main>

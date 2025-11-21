@@ -215,8 +215,9 @@
         
         <div class="space-y-5">
           <div>
-            <label class="block text-sm font-semibold mb-2">Event Title *</label>
+            <label for="event-title" class="block text-sm font-semibold mb-2">Event Title *</label>
             <input 
+              id="event-title"
               class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
               bind:value={form.title} 
               placeholder="Event title"
@@ -224,19 +225,20 @@
           </div>
           
           <div>
-            <label class="block text-sm font-semibold mb-2">Description</label>
+            <label for="event-description" class="block text-sm font-semibold mb-2">Description</label>
             <textarea 
+              id="event-description"
               class="w-full rounded-lg border border-gray-300 px-4 py-3 resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
               rows="4"
               bind:value={form.description} 
               placeholder="Describe your event"
-            />
+            ></textarea>
           </div>
           
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold mb-2">Category *</label>
-              <select class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" bind:value={form.category}>
+              <label for="event-category" class="block text-sm font-semibold mb-2">Category *</label>
+              <select id="event-category" class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" bind:value={form.category}>
                 {#each categories as cat}
                   <option value={cat}>{cat}</option>
                 {/each}
@@ -244,9 +246,10 @@
             </div>
             
             <div>
-              <label class="block text-sm font-semibold mb-2">Max Attendees</label>
+              <label for="max-attendees" class="block text-sm font-semibold mb-2">Max Attendees</label>
               <input 
                 type="number" 
+                id="max-attendees"
                 class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
                 bind:value={form.maxAttendees} 
                 placeholder="Optional"
@@ -266,8 +269,9 @@
           
           {#if form.isOnline}
             <div>
-              <label class="block text-sm font-semibold mb-2">Meeting URL</label>
+              <label for="meeting-url" class="block text-sm font-semibold mb-2">Meeting URL</label>
               <input 
+                id="meeting-url"
                 class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
                 bind:value={form.meetingUrl} 
                 placeholder="https://..."
@@ -275,8 +279,9 @@
             </div>
           {:else}
             <div>
-              <label class="block text-sm font-semibold mb-2">Location</label>
+              <label for="event-location" class="block text-sm font-semibold mb-2">Location</label>
               <input 
+                id="event-location"
                 class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
                 bind:value={form.location} 
                 placeholder="Enter venue or address"
@@ -286,18 +291,20 @@
           
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold mb-2">Start Time *</label>
+              <label for="start-time" class="block text-sm font-semibold mb-2">Start Time *</label>
               <input 
                 type="datetime-local" 
+                id="start-time"
                 class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
                 bind:value={form.startTime}
               />
             </div>
             
             <div>
-              <label class="block text-sm font-semibold mb-2">End Time</label>
+              <label for="end-time" class="block text-sm font-semibold mb-2">End Time</label>
               <input 
                 type="datetime-local" 
+                id="end-time"
                 class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
                 bind:value={form.endTime}
               />
@@ -305,7 +312,7 @@
           </div>
           
           <div class="space-y-3">
-            <label class="block text-sm font-semibold">Cover Image</label>
+            <label for="cover-image" class="block text-sm font-semibold">Cover Image</label>
             
             {#if coverPreview}
               <div class="relative w-full h-48 rounded-lg overflow-hidden border">
@@ -319,8 +326,8 @@
               </div>
             {/if}
             
-            <label class="px-4 py-2 rounded-lg border hover:bg-gray-100 cursor-pointer inline-flex items-center gap-2">
-              <input type="file" class="hidden" accept="image/*" on:change={handleCoverSelect} />
+            <label for="cover-image" class="px-4 py-2 rounded-lg border hover:bg-gray-100 cursor-pointer inline-flex items-center gap-2">
+              <input id="cover-image" type="file" class="hidden" accept="image/*" on:change={handleCoverSelect} />
               <ImageIcon class="size-5" />
               <span class="text-sm font-medium">{coverPreview ? 'Change Cover' : 'Upload Cover'}</span>
             </label>

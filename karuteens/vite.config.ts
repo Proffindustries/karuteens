@@ -14,6 +14,31 @@ export default defineConfig({
 			outdir: './src/lib/paraglide'
 		})
 	],
+	build: {
+		rollupOptions: {
+			output: {
+				manualChunks: {
+					vendor: ['@supabase/supabase-js', '@supabase/ssr'],
+					ui: ['lucide-svelte']
+				}
+			}
+		},
+		cssCodeSplit: true,
+		minify: 'terser',
+		terserOptions: {
+			compress: {
+				drop_console: true,
+				drop_debugger: true,
+				pure_funcs: ['console.log']
+			}
+		}
+	},
+	server: {
+		cors: true,
+		hmr: {
+			overlay: false
+		}
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

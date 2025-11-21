@@ -5,13 +5,20 @@
 
   let mounted = false;
   let floatingIndex = 0;
+  let reducedMotion = false;
 
   onMount(() => {
     mounted = true;
-    const interval = setInterval(() => {
-      floatingIndex = (floatingIndex + 1) % 3;
-    }, 3000);
-    return () => clearInterval(interval);
+    // Check for reduced motion preference
+    reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    
+    // Only run animations if user doesn't prefer reduced motion
+    if (!reducedMotion) {
+      const interval = setInterval(() => {
+        floatingIndex = (floatingIndex + 1) % 3;
+      }, 3000);
+      return () => clearInterval(interval);
+    }
   });
 </script>
 

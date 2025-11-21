@@ -7,16 +7,39 @@ export const user = writable<User | null>(null);
 export const session = writable<Session | null>(null);
 export const authReady = writable(false);
 
-if (browser) {
-	supabase.auth.getSession().then(({ data }) => {
-		session.set(data.session);
-		user.set(data.session?.user ?? null);
-		authReady.set(true);
-	});
+// Cache user data to reduce redundant calls
+let cachedUser: User | null = null;
+let cachedSession: Session | null = null;
 
-	supabase.auth.onAuthStateChange((_event, newSession) => {
+if (browser) {
+	// Use cached data if available
+	if (cachedSession) {
+		session.set(cachedSession);
+		user.set(cachedUser);
+		authReady.set(true);
+	} else {
+		supabase.auth.getSession().then(({ data }) => {
+			cachedSession = data.session;
+			cachedUser = data.session?.user ?? null;
+			session.set(cachedSession);
+			user.set(cachedUser);
+			authReady.set(true);
+		});
+	}
+
+	// Optimize auth state change listener
+	const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+		cachedSession = newSession;
+		cachedUser = newSession?.user ?? null;
 		session.set(newSession);
 		user.set(newSession?.user ?? null);
 		authReady.set(true);
 	});
+
+	// Clean up listener on unload
+	if (browser) {
+		window.addEventListener('beforeunload', () => {
+			authListener?.subscription.unsubscribe();
+		});
+	}
 }

@@ -5,9 +5,21 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { supabase } from '$lib/supabase/client';
+	import { onMount } from 'svelte';
 
 	let { children, data } = $props();
 	let initializing = $state(true);
+	let fontsLoaded = $state(false);
+
+	// Preload critical fonts
+	onMount(() => {
+		if (browser) {
+			// Preload fonts
+			document.fonts.ready.then(() => {
+				fontsLoaded = true;
+			});
+		}
+	});
 
 	function isAuthPath(p: string) {
 		return p.startsWith('/auth');
@@ -27,7 +39,7 @@
 	if (browser) {
 		const safety = setTimeout(() => {
 			initializing = false;
-		}, 4000);
+		}, 2000);
 
 		supabase.auth.onAuthStateChange((event, session) => {
 			if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {

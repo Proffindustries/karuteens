@@ -3,21 +3,24 @@
   import { supabase } from '$lib/supabase/client';
   import { user } from '$lib/stores/auth';
   import { Send, Image as ImageIcon, Eraser, Pencil, Share2 } from 'lucide-svelte';
+  import type { StudyRoom } from '$lib/types/study-room';
+  import type { StudyRoomMember, StudyRoomMessage, WebRTCMessage, DrawStroke } from '$lib/types/study-room-detail';
   
   export let params: { id: string };
-  let roomId = params.id;
+  const roomId = params.id;
   
-  let room: any = null;
-  let members: any[] = [];
-  let messages: any[] = [];
+  let room: StudyRoom | null = null;
+  let members: StudyRoomMember[] = [];
+  let messages: StudyRoomMessage[] = [];
   let messageText = '';
   let sending = false;
   let uploading = false;
-  let subscription: any = null;
+  let subscription: ReturnType<typeof supabase.channel> | null = null;
   
   // Board state
   let activeTab: 'board' | 'meeting' | 'chat' = 'board';
-  let boardChannel: any = null;
+  let boardChannel: ReturnType<typeof supabase.channel> | null = null;
+  let rtcChannel: ReturnType<typeof supabase.channel> | null = null;
   let sharedCanvas: HTMLCanvasElement | null = null;
   let sharedCtx: CanvasRenderingContext2D | null = null;
   let personalCanvas: HTMLCanvasElement | null = null;
@@ -27,20 +30,53 @@
   let penColor = '#1d4ed8';
   let penSize = 3;
   
+  // WebRTC state
+  let localStream: MediaStream | null = null;
+  let remoteStream: MediaStream | null = null;
+  let peerConnection: RTCPeerConnection | null = null;
+  const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  
   onMount(async () => {
-    await loadRoom();
-    await loadMembers();
-    await loadMessages();
-    subscribeMessages();
-    setupBoardChannel();
-    setupRtcChannel();
-    attachCanvases();
-    window.addEventListener('resize', resizeCanvases);
+    try {
+      await Promise.all([
+        loadRoom(),
+        loadMembers(),
+        loadMessages()
+      ]);
+      
+      subscribeMessages();
+      setupBoardChannel();
+      setupRtcChannel();
+      attachCanvases();
+      window.addEventListener('resize', resizeCanvases);
+    } catch (error) {
+      console.error('Error initializing study room:', error);
+    }
   });
   
   onDestroy(() => {
+    // Cleanup subscriptions
     if (subscription) subscription.unsubscribe();
     if (boardChannel) boardChannel.unsubscribe();
+    if (rtcChannel) rtcChannel.unsubscribe();
+    
+    // Cleanup WebRTC
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
+    
+    // Cleanup media streams
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      localStream = null;
+    }
+    
+    if (remoteStream) {
+      remoteStream.getTracks().forEach(track => track.stop());
+      remoteStream = null;
+    }
+    
     window.removeEventListener('resize', resizeCanvases);
   });
   
@@ -91,60 +127,285 @@
   }
   
   function setupBoardChannel() {
+    if (!roomId) return;
+    
     boardChannel = supabase
       .channel(`study-room-${roomId}-board`)
-      .on('broadcast', { event: 'draw' }, (payload: any) => {
-        const stroke = payload?.payload as { color: string; size: number; points: Array<{ x: number; y: number }> };
-        if (!sharedCtx || !stroke) return;
-        drawStroke(sharedCtx, stroke);
+      .on('broadcast', { event: 'draw' }, (payload: { payload: DrawStroke }) => {
+        if (!sharedCtx || !payload?.payload) return;
+        drawStroke(sharedCtx, payload.payload);
       })
       .on('broadcast', { event: 'clear' }, () => {
-        clearCanvas(sharedCtx);
-      })
-      .subscribe();
+        if (sharedCtx) clearCanvas(sharedCtx);
+      });
+      
+    boardChannel.subscribe((status: string) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error('Error subscribing to board channel');
+      }
+    });
   }
 
-  // Meeting (WebRTC) state
-  let rtcChannel: any = null;
-  let pc: RTCPeerConnection | null = null;
-  let localStream: MediaStream | null = null;
-  let remoteStream: MediaStream | null = null;
-
   function setupRtcChannel() {
-    rtcChannel = supabase
-      .channel(`study-room-${roomId}-rtc`)
-      .on('broadcast', { event: 'offer' }, async ({ payload }) => {
+    if (!roomId) return;
+    
+    rtcChannel = supabase.channel(`study-room-${roomId}-rtc`);
+    
+    rtcChannel
+      .on('broadcast', { event: 'offer' }, async ({ payload }: { payload: WebRTCMessage }) => {
+        if (!rtcChannel || !payload.sender || payload.sender === $user?.id) return;
+        
         try {
-          if (payload?.from === $user?.id) return;
-          await ensurePeer();
-          await pc!.setRemoteDescription(payload.sdp);
-          if (!localStream) {
-            try {
-              localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-              const lv = document.getElementById('localVideo') as HTMLVideoElement;
-              if (lv && localStream) lv.srcObject = localStream;
-              localStream.getTracks().forEach((t) => pc!.addTrack(t, localStream!));
-            } catch (e) {
-              console.error('getUserMedia failed', e);
-            }
+          if (!peerConnection) {
+            await createPeerConnection();
           }
-          const answer = await pc!.createAnswer();
-          await pc!.setLocalDescription(answer);
-          rtcChannel?.send({ type: 'broadcast', event: 'answer', payload: { sdp: answer, to: payload.from, from: $user?.id } });
-        } catch (err) {
-          console.error('handle offer error', err);
+          
+          if (payload.sdp) {
+            await peerConnection?.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            const answer = await peerConnection?.createAnswer();
+            await peerConnection?.setLocalDescription(answer);
+            
+            // Send the answer back to the sender
+            rtcChannel?.send({
+              type: 'broadcast',
+              event: 'answer',
+              payload: {
+                type: 'answer',
+                sdp: peerConnection?.localDescription,
+                target: payload.sender,
+                sender: $user?.id
+              } as WebRTCMessage
+            });
+          }
+        } catch (error) {
+          console.error('Error handling offer:', error);
         }
       })
-      .on('broadcast', { event: 'answer' }, async ({ payload }) => {
+      .on('broadcast', { event: 'answer' }, async ({ payload }: { payload: WebRTCMessage }) => {
+        if (!rtcChannel || !payload.sender || payload.sender === $user?.id) return;
+        
         try {
-          if (payload?.to !== $user?.id) return;
-          if (!pc) return;
-          await pc.setRemoteDescription(payload.sdp);
-        } catch (err) {
-          console.error('handle answer error', err);
+          if (payload.sdp && peerConnection) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          }
+        } catch (error) {
+          console.error('Error handling answer:', error);
         }
       })
-      .on('broadcast', { event: 'candidate' }, async ({ payload }) => {
+      .on('broadcast', { event: 'candidate' }, async ({ payload }: { payload: WebRTCMessage }) => {
+        if (!rtcChannel || !payload.sender || payload.sender === $user?.id || !peerConnection) return;
+        
+        try {
+          if (payload.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          }
+        } catch (error) {
+          console.error('Error handling ICE candidate:', error);
+        }
+      });
+      
+    rtcChannel.subscribe((status: string) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error('Error subscribing to RTC channel');
+      }
+    });
+  }
+  
+  async function createPeerConnection() {
+    if (peerConnection) return;
+    
+    peerConnection = new RTCPeerConnection(configuration);
+    
+    // Add local stream tracks if available
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        if (localStream) {
+          peerConnection?.addTrack(track, localStream);
+        }
+      });
+    }
+    
+    // Handle remote stream
+    peerConnection.ontrack = (event) => {
+      if (!remoteStream) {
+        remoteStream = new MediaStream();
+      }
+      event.streams[0].getTracks().forEach(track => {
+        remoteStream?.addTrack(track);
+      });
+    };
+    
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        rtcChannel?.send({
+          type: 'broadcast',
+          event: 'candidate',
+          payload: {
+            type: 'candidate',
+            candidate: event.candidate,
+            sender: $user?.id
+          } as WebRTCMessage
+        });
+      }
+    };
+    
+    return peerConnection;
+  }
+  async function startLocalStream() {
+    try {
+      if (localStream) return;
+      
+      localStream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      
+      const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
+      if (localVideo) {
+        localVideo.srcObject = localStream;
+      }
+      
+      // Add local stream tracks to peer connection if it exists
+      if (peerConnection) {
+        localStream.getTracks().forEach(track => {
+          peerConnection?.addTrack(track, localStream!);
+        });
+      }
+      
+      return localStream;
+    } catch (error) {
+      console.error('Error accessing media devices:', error);
+      throw error;
+    }
+  }
+  
+  async function stopLocalStream() {
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      localStream = null;
+      
+      const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
+      if (localVideo) {
+        localVideo.srcObject = null;
+      }
+    }
+  }
+  
+  async function startScreenShare() {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      });
+      
+      // Stop existing screen share if any
+      if (localStream) {
+        await stopLocalStream();
+      }
+      
+      localStream = stream;
+      
+      // Handle when user stops screen sharing
+      stream.getVideoTracks()[0].onended = () => {
+        stopLocalStream();
+      };
+      
+      // Update local video element
+      const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
+      if (localVideo) {
+        localVideo.srcObject = stream;
+      }
+      
+      // Add tracks to peer connection if it exists
+      if (peerConnection) {
+        stream.getTracks().forEach(track => {
+          peerConnection?.addTrack(track, stream);
+        });
+      }
+      
+      return stream;
+    } catch (error) {
+      console.error('Error sharing screen:', error);
+      throw error;
+    }
+  }
+
+  async function startMeeting() {
+    try {
+      await startLocalStream();
+      await createPeerConnection();
+      
+      // Create and send offer
+      if (peerConnection) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        
+        rtcChannel?.send({
+          type: 'broadcast',
+          event: 'offer',
+          payload: {
+            type: 'offer',
+            sdp: peerConnection.localDescription,
+            sender: $user?.id
+          } as WebRTCMessage
+        });
+      }
+    } catch (error) {
+      console.error('Error starting meeting:', error);
+    }
+  }
+  
+  async function stopMeeting() {
+    try {
+      await stopLocalStream();
+      
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      
+      if (rtcChannel) {
+        await rtcChannel.send({
+          type: 'broadcast',
+          event: 'leave',
+          payload: {
+            type: 'leave',
+            sender: $user?.id
+          } as WebRTCMessage
+        });
+      }
+      
+      const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
+      if (remoteVideo) {
+        remoteVideo.srcObject = null;
+      }
+      
+      if (remoteStream) {
+        remoteStream.getTracks().forEach(track => track.stop());
+        remoteStream = null;
+      }
+    } catch (error) {
+      console.error('Error stopping meeting:', error);
+    }
+  }
+  
+  // Handle WebRTC events
+  function setupRtcEventHandlers() {
+    if (!rtcChannel) return;
+    
+    rtcChannel
+      .on('broadcast', { event: 'answer' }, async ({ payload }: { payload: WebRTCMessage }) => {
+        try {
+          if (!payload.sender || payload.sender === $user?.id || !peerConnection) return;
+          if (payload.sdp) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          }
+        } catch (error) {
+          console.error('Error handling answer:', error);
+        }
+      })
+      .on('broadcast', { event: 'candidate' }, async ({ payload }: { payload: WebRTCMessage }) => {
         try {
           if (!pc) return;
           await pc.addIceCandidate(payload.candidate);
@@ -378,7 +639,16 @@
           </div>
           <div>
             <p class="text-sm text-foreground/60 mb-2">Remote</p>
-            <video id="remoteVideo" autoplay playsinline class="w-full rounded-lg bg-black h-[30vh]"></video>
+            <video 
+  id="remoteVideo" 
+  autoplay 
+  playsinline 
+  class="w-full rounded-lg bg-black h-[30vh]"
+  aria-label="Remote participant video"
+  controls
+>
+  <track kind="captions" src="" label="English" srclang="en" default>
+</video>
           </div>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, boolean, integer, jsonb, interval, decimal } from 'drizzle-orm/pg-core';
 
 // User profiles table (extends Supabase auth.users)
 export const profiles = pgTable('profiles', {
@@ -135,6 +135,25 @@ export const comments = pgTable('comments', {
 	content: text('content').notNull(),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 });
+
+export type Comment = typeof comments.$inferSelect;
+export type InsertComment = typeof comments.$inferInsert;
+
+// Comment reactions (likes, emojis) for feed post comments
+export const commentReactions = pgTable('comment_reactions', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	commentId: uuid('comment_id')
+		.notNull()
+		.references(() => comments.id, { onDelete: 'cascade' }),
+	userId: uuid('user_id')
+		.notNull()
+		.references(() => profiles.id, { onDelete: 'cascade' }),
+	reactionType: text('reaction_type').notNull().default('like'), // 'like' | 'love' | 'haha' | ...
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type CommentReaction = typeof commentReactions.$inferSelect;
+export type InsertCommentReaction = typeof commentReactions.$inferInsert;
 
 // Direct messages
 export const directMessages = pgTable('direct_messages', {
@@ -381,7 +400,7 @@ export type InsertContentComment = typeof contentComments.$inferInsert;
 export const reports = pgTable('reports', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	reporterId: uuid('reporter_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
-	reportType: text('report_type').notNull(), // ' 'user', 'content', 'technical'
+	reportType: text('report_type').notNull(), // 'user', 'content', 'technical'
 	targetId: text('target_id'),
 	reason: text('reason').notNull(),
 	description: text('description').notNull(),
@@ -392,6 +411,71 @@ export const reports = pgTable('reports', {
 
 export type Report = typeof reports.$inferSelect;
 export type InsertReport = typeof reports.$inferInsert;
+
+// Enforcement Actions
+export const enforcementActions = pgTable('enforcement_actions', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	reportId: uuid('report_id').references(() => reports.id, { onDelete: 'cascade' }),
+	moderatorId: uuid('moderator_id').references(() => profiles.id, { onDelete: 'cascade' }),
+	actionType: text('action_type').notNull(), // 'warn', 'suspend', 'ban', 'delete_content', 'hide_content', 'reset_password'
+	targetType: text('target_type').notNull(), // 'user', 'content', 'comment'
+	targetId: text('target_id').notNull(),
+	reason: text('reason').notNull(),
+	description: text('description'),
+	duration: interval('duration'), // for temporary suspensions/bans
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type EnforcementAction = typeof enforcementActions.$inferSelect;
+export type InsertEnforcementAction = typeof enforcementActions.$inferInsert;
+
+// Appeals
+export const appeals = pgTable('appeals', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	reportId: uuid('report_id').references(() => reports.id, { onDelete: 'cascade' }),
+	userId: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }),
+	reason: text('reason').notNull(),
+	description: text('description').notNull(),
+	status: text('status').notNull().default('pending'), // 'pending', 'reviewing', 'approved', 'rejected'
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type Appeal = typeof appeals.$inferSelect;
+export type InsertAppeal = typeof appeals.$inferInsert;
+
+// Moderation Logs
+export const moderationLogs = pgTable('moderation_logs', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	moderatorId: uuid('moderator_id').references(() => profiles.id, { onDelete: 'cascade' }),
+	actionType: text('action_type').notNull(),
+	targetType: text('target_type').notNull(),
+	targetId: text('target_id').notNull(),
+	reason: text('reason').notNull(),
+	description: text('description'),
+	ipAddress: text('ip_address'),
+	userAgent: text('user_agent'),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type ModerationLog = typeof moderationLogs.$inferSelect;
+export type InsertModerationLog = typeof moderationLogs.$inferInsert;
+
+// Auto Flags
+export const autoFlags = pgTable('auto_flags', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	contentType: text('content_type').notNull(), // 'post', 'comment', 'user_profile', 'media'
+	contentId: text('content_id').notNull(),
+	flagType: text('flag_type').notNull(), // 'toxicity', 'nudity', 'hate_speech', 'spam', 'copyright'
+	confidenceScore: decimal('confidence_score', { precision: 3, scale: 2 }), // 0.00 to 1.00
+	details: jsonb('details'),
+	status: text('status').notNull().default('pending'), // 'pending', 'reviewed', 'dismissed'
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export type AutoFlag = typeof autoFlags.$inferSelect;
+export type InsertAutoFlag = typeof autoFlags.$inferInsert;
 
 // Notifications table
 export const notifications = pgTable('notifications', {
@@ -434,6 +518,10 @@ export const sessions = pgTable('sessions', {
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
+
+
+
+
 
 
 

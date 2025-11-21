@@ -19,6 +19,11 @@
   let selectedFile: File | null = null;
   let filePreview: string | null = null;
   
+  // Real-time features
+  let typingUsers: string[] = []; // Users currently typing
+  let typingTimeout: any = null;
+  let isTyping = false;
+  
   onMount(async () => {
     await loadConversations();
     await loadAllUsers();
@@ -27,6 +32,7 @@
   
   onDestroy(() => {
     if (messageSubscription) messageSubscription.unsubscribe();
+    if (typingTimeout) clearTimeout(typingTimeout);
   });
   
   async function loadConversations() {
@@ -196,6 +202,9 @@
     await loadMessages(conv.id);
     subscribeToMessages(conv.id);
     markAsRead(conv.id);
+    
+    // Subscribe to typing indicators
+    subscribeToTyping(conv.id);
   }
   
   async function loadMessages(conversationId: string) {
@@ -238,6 +247,64 @@
       .subscribe();
   }
   
+  function subscribeToTyping(conversationId: string) {
+    // Clear existing typing indicators
+    typingUsers = [];
+    
+    // Subscribe to conversation participants changes for typing indicators
+    supabase
+      .channel(`typing-${conversationId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversation_participants' },
+        (payload) => {
+          const { user_id, typing, typing_updated_at } = payload.new;
+          
+          // Only show typing for other users
+          if (user_id !== $user?.id) {
+            if (typing && typing_updated_at) {
+              // Check if typing indicator is recent (within 5 seconds)
+              const updateTime = new Date(typing_updated_at).getTime();
+              const now = Date.now();
+              if (now - updateTime < 5000) {
+                if (!typingUsers.includes(user_id)) {
+                  typingUsers = [...typingUsers, user_id];
+                }
+              }
+            } else {
+              // Remove user from typing list
+              typingUsers = typingUsers.filter(id => id !== user_id);
+            }
+          }
+        }
+      )
+      .subscribe();
+  }
+  
+  function sendTypingIndicator(isTyping: boolean) {
+    if (!selectedConversation || !$user) return;
+    
+    // Clear any existing timeout
+    if (typingTimeout) clearTimeout(typingTimeout);
+    
+    // Send typing indicator to server
+    fetch('/api/messaging', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: selectedConversation.id,
+        isTyping: isTyping
+      })
+    });
+    
+    // If typing, set timeout to clear typing indicator after 5 seconds
+    if (isTyping) {
+      typingTimeout = setTimeout(() => {
+        sendTypingIndicator(false);
+      }, 5000);
+    }
+  }
+  
   async function markAsRead(conversationId: string) {
     if (!$user) return;
     
@@ -259,6 +326,9 @@
     if ((!messageText.trim() && !selectedFile) || !selectedConversation || !$user) return;
     
     sending = true;
+    
+    // Clear typing indicator when sending message
+    sendTypingIndicator(false);
     
     let mediaUrl = null;
     let mediaType = null;
@@ -331,7 +401,7 @@
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          filePreview = e.target?.result as string;
+          filePreview = (e.target as FileReader).result as string;
         };
         reader.readAsDataURL(file);
       } else {
@@ -418,6 +488,7 @@
           <button
             class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 border-b {selectedConversation?.id === conv.id ? 'bg-blue-50' : ''}"
             on:click={() => selectConversation(conv)}
+            on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectConversation(conv)}
           >
             <img 
               src={conv.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${conv.otherUser?.username}`}
@@ -450,7 +521,7 @@
       <!-- Chat Header -->
       <div class="bg-white border-b p-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <button class="md:hidden" on:click={() => selectedConversation = null}>
+          <button class="md:hidden" on:click={() => selectedConversation = null} on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && (selectedConversation = null)}>
             <ArrowLeft class="size-6" />
           </button>
           <img 
@@ -464,13 +535,13 @@
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button class="p-2 hover:bg-gray-100 rounded-lg">
+          <button class="p-2 hover:bg-gray-100 rounded-lg" on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && e.currentTarget.click()}>
             <Phone class="size-5" />
           </button>
-          <button class="p-2 hover:bg-gray-100 rounded-lg">
+          <button class="p-2 hover:bg-gray-100 rounded-lg" on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && e.currentTarget.click()}>
             <Video class="size-5" />
           </button>
-          <button class="p-2 hover:bg-gray-100 rounded-lg">
+          <button class="p-2 hover:bg-gray-100 rounded-lg" on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && e.currentTarget.click()}>
             <MoreVertical class="size-5" />
           </button>
         </div>
@@ -496,7 +567,7 @@
                   {#if message.media_type === 'image'}
                     <img src={message.media_url} alt="Media" class="mt-2 rounded-lg max-w-full" />
                   {:else if message.media_type === 'video'}
-                    <video src={message.media_url} controls class="mt-2 rounded-lg max-w-full"></video>
+                    <video src={message.media_url} controls class="mt-2 rounded-lg max-w-full"><track kind="captions" /></video>
                   {:else if message.media_type === 'audio'}
                     <audio src={message.media_url} controls class="mt-2 w-full"></audio>
                   {:else}
@@ -512,6 +583,24 @@
             </div>
           </div>
         {/each}
+        
+        <!-- Typing indicators -->
+        {#if typingUsers.length > 0}
+          <div class="flex justify-start">
+            <img 
+              src={selectedConversation?.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${selectedConversation?.otherUser?.username}`}
+              alt={selectedConversation?.otherUser?.username}
+              class="size-8 rounded-full mr-2"
+            />
+            <div class="bg-white text-gray-800 rounded-2xl px-4 py-2 shadow">
+              <div class="flex space-x-1">
+                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+              </div>
+            </div>
+          </div>
+        {/if}
       </div>
       
       <!-- Input -->
@@ -539,7 +628,7 @@
               {:else}
                 <span class="text-xs">{selectedFile?.name}</span>
               {/if}
-              <button class="p-1 hover:bg-gray-200 rounded-full" on:click={removeFile}>
+              <button class="p-1 hover:bg-gray-200 rounded-full" on:click={removeFile} on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && removeFile()}>
                 <Trash2 class="size-4" />
               </button>
             </div>
@@ -551,6 +640,8 @@
             class="flex-1 px-4 py-2 rounded-full border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             bind:value={messageText}
             on:keypress={(e) => e.key === 'Enter' && sendMessage()}
+            on:focusout={() => sendTypingIndicator(false)}
+            on:input={() => sendTypingIndicator(true)}
             disabled={sending}
           />
           <button 
@@ -578,11 +669,11 @@
 
 <!-- New Message Modal -->
 {#if showNewMessageModal}
-  <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={() => showNewMessageModal = false}>
-    <div class="bg-white rounded-2xl max-w-md w-full max-h-[80vh] flex flex-col" on:click|stopPropagation>
+  <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="new-message-title" tabindex="-1">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[80vh] flex flex-col">
       <div class="p-4 border-b flex items-center justify-between">
-        <h2 class="text-xl font-bold">New Message</h2>
-        <button class="p-2 hover:bg-gray-100 rounded-lg" on:click={() => showNewMessageModal = false}>
+        <h2 id="new-message-title" class="text-xl font-bold">New Message</h2>
+        <button class="p-2 hover:bg-gray-100 rounded-lg" on:click={() => showNewMessageModal = false} on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && (showNewMessageModal = false)}>
           <X class="size-5" />
         </button>
       </div>
@@ -595,7 +686,6 @@
             placeholder="Search users..."
             class="w-full pl-9 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             bind:value={newMessageSearch}
-            autofocus
           />
         </div>
       </div>
@@ -610,6 +700,7 @@
             <button
               class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 border-b"
               on:click={() => startNewConversation(otherUser.id)}
+              on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && startNewConversation(otherUser.id)}
             >
               <img 
                 src={otherUser.avatar_url || `https://ui-avatars.com/api/?name=${otherUser.username}`}
