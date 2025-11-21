@@ -4,6 +4,7 @@
   import { user } from '$lib/stores/auth';
   import { Search, Plus, Users, CalendarDays, BookOpen, X } from 'lucide-svelte';
   import type { StudyRoom } from '$lib/types/study-room';
+  import { goto } from '$app/navigation';
   
   interface RoomFormData {
     title: string;
@@ -38,6 +39,7 @@
     const { data } = await supabase
       .from('study_rooms')
       .select('*')
+      .eq('is_public', true)
       .order('scheduled_at', { ascending: true });
     
     if (data) {
@@ -76,7 +78,7 @@
             is_public: form.isPublic,
             scheduled_at: form.scheduledAt || null,
             max_members: form.maxMembers,
-            user_id: currentUser.id
+            host_id: currentUser.id
           }
         ])
         .select()
@@ -109,7 +111,7 @@
       };
       
       // Redirect to the new room
-      window.location.href = `/study-rooms/${room.id}`;
+      goto(`/study-rooms/${room.id}`);
     } catch (error) {
       console.error('Error creating room:', error);
       alert(error instanceof Error ? error.message : 'Failed to create room');
@@ -119,7 +121,7 @@
   }
   
   async function joinRoom(roomId: string) {
-    if (!$user) { window.location.href = '/login'; return; }
+    if (!$user) { goto('/login'); return; }
     
     const { data: existing } = await supabase
       .from('study_room_members')
@@ -134,7 +136,7 @@
         .insert({ room_id: roomId, user_id: $user.id, role: 'member' });
       if (error) { alert(error.message); return; }
     }
-    window.location.href = `/study-rooms/${roomId}`;
+    goto(`/study-rooms/${roomId}`);
   }
 </script>
 
@@ -143,6 +145,7 @@
     <h1 class="text-4xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Study Rooms</h1>
     <p class="text-foreground/70">Create or join virtual rooms to study together</p>
   </div>
+
   
   <!-- Search + Create -->
   <section class="rounded-2xl border bg-white shadow-lg p-6 space-y-4">
@@ -202,86 +205,120 @@
     </section>
   {/if}
   
-  <!-- Create Modal -->
-  {#if showCreateModal}
-    <div role="dialog" aria-modal="true" aria-labelledby="create-room-title" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={() => showCreateModal = false}>
-      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4" on:click|stopPropagation>
-        <div class="flex items-center justify-between">
-          <h2 id="create-room-title" class="text-2xl font-bold">Create Study Room</h2>
-          <button class="p-2 hover:bg-gray-100 rounded-lg" on:click={() => showCreateModal = false}>
-            <X class="size-5" />
-          </button>
-        </div>
+<!-- Modal for creating a new room -->
+{#if showCreateModal}
+  <div 
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="create-room-title"
+    tabindex="-1"
+    on:click|self={() => showCreateModal = false}
+    on:keydown|self={(e) => e.key === 'Escape' && (showCreateModal = false)}
+    class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+  >
+    <div
+      class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl"
+      role="document"
+    >
+      <div class="flex justify-between items-center mb-6">
+        <h2 id="create-room-title" class="text-2xl font-bold">Create Study Room</h2>
+        <button 
+          type="button"
+          on:click={() => showCreateModal = false}
+          class="text-gray-500 hover:text-gray-700"
+          aria-label="Close"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      
+      <form on:submit|preventDefault={createRoom} class="space-y-4">
         <div class="space-y-4">
           <div>
-            <label for="room-title" class="block text-sm font-medium mb-1">Title *</label>
-            <input 
+            <label for="room-title" class="block text-sm font-medium mb-1">Room Title</label>
+            <input
               id="room-title"
-              class="w-full rounded-lg border px-4 py-2" 
-              bind:value={form.title} 
-              placeholder="e.g. Calculus Revision"
+              type="text"
+              class="w-full rounded-lg border px-4 py-2"
+              bind:value={form.title}
               required
+              placeholder="Enter room title"
             />
           </div>
           <div>
-            <label for="room-subject" class="block text-sm font-medium mb-1">Subject *</label>
-            <input 
+            <label for="room-subject" class="block text-sm font-medium mb-1">Subject</label>
+            <input
               id="room-subject"
-              class="w-full rounded-lg border px-4 py-2" 
-              bind:value={form.subject} 
-              placeholder="e.g. MTH101"
+              type="text"
+              class="w-full rounded-lg border px-4 py-2"
+              bind:value={form.subject}
               required
+              placeholder="e.g., Mathematics, Physics"
             />
           </div>
           <div>
             <label for="room-description" class="block text-sm font-medium mb-1">Description</label>
-            <textarea 
+            <textarea
               id="room-description"
-              class="w-full rounded-lg border px-4 py-2 resize-none" 
-              rows={3} 
-              bind:value={form.description} 
-              placeholder="What will be covered?"
+              rows="3"
+              class="w-full rounded-lg border px-4 py-2"
+              bind:value={form.description}
+              placeholder="Optional description..."
             ></textarea>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label for="room-schedule" class="block text-sm font-medium mb-1">Scheduled Time</label>
-              <input 
-                id="room-schedule"
-                type="datetime-local" 
-                class="w-full rounded-lg border px-4 py-2" 
-                bind:value={form.scheduledAt} 
-              />
-            </div>
-            <div>
-              <label for="room-max-members" class="block text-sm font-medium mb-1">Max Members</label>
-              <input 
-                id="room-max-members"
-                type="number" 
-                min="2" 
-                max="50" 
-                class="w-full rounded-lg border px-4 py-2" 
-                bind:value={form.maxMembers} 
-              />
-            </div>
+          <div class="flex items-center space-x-2">
+            <input
+              id="room-public"
+              type="checkbox"
+              class="rounded border-gray-300"
+              bind:value={form.isPublic}
+            />
+            <label for="room-public" class="text-sm font-medium">Public Room (anyone can join)</label>
           </div>
-          <div class="flex items-center gap-2">
-            <div class="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="public-room" 
-                class="rounded" 
-                bind:checked={form.isPublic} 
-              />
-              <label for="public-room" class="text-sm">Public room</label>
-            </div>
+          <div>
+            <label for="room-scheduled" class="block text-sm font-medium mb-1">Scheduled Start (optional)</label>
+            <input
+              id="room-scheduled"
+              type="datetime-local"
+              class="w-full rounded-lg border px-4 py-2"
+              bind:value={form.scheduledAt}
+            />
+          </div>
+          <div>
+            <label for="room-max-members" class="block text-sm font-medium mb-1">Max Members</label>
+            <input
+              id="room-max-members"
+              type="number"
+              min="1"
+              max="100"
+              class="w-full rounded-lg border px-4 py-2"
+              bind:value={form.maxMembers}
+              required
+            />
           </div>
         </div>
+        
         <div class="flex gap-3 pt-2">
-          <button class="flex-1 px-4 py-2 rounded-lg border hover:bg-gray-100" on:click={() => showCreateModal = false}>Cancel</button>
-          <button class="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white disabled:opacity-50" on:click={createRoom} disabled={creating || !form.title || !form.subject}>{creating ? 'Creating...' : 'Create Room'}</button>
+          <button 
+            type="button"
+            on:click={() => showCreateModal = false}
+            class="flex-1 px-4 py-2 rounded-lg border hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            class="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white disabled:opacity-50" 
+            disabled={creating || !form.title || !form.subject}
+          >
+            {creating ? 'Creating...' : 'Create Room'}
+          </button>
         </div>
-      </div>
+      </form>
     </div>
-  {/if}
+  </div>
+{/if}
 </main>

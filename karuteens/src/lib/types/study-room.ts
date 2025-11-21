@@ -7,7 +7,7 @@ export interface StudyRoom {
   max_members: number;
   scheduled_at: string | null;
   created_at: string;
-  user_id: string;
+  host_id: string;
   member_count?: number;
 }
 

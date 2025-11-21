@@ -112,7 +112,7 @@
   function subscribeMessages() {
     subscription = supabase
       .channel(`study-room-${roomId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'study_room_messages', filter: `room_id=eq.${roomId}` }, async (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'study_room_messages', filter: `room_id=eq.${roomId}` }, async (payload: any) => {
         const { data } = await supabase
           .from('study_room_messages')
           .select('*, profiles!study_room_messages_sender_id_fkey(username, avatar_url)')
@@ -390,78 +390,6 @@
     }
   }
   
-  // Handle WebRTC events
-  function setupRtcEventHandlers() {
-    if (!rtcChannel) return;
-    
-    rtcChannel
-      .on('broadcast', { event: 'answer' }, async ({ payload }: { payload: WebRTCMessage }) => {
-        try {
-          if (!payload.sender || payload.sender === $user?.id || !peerConnection) return;
-          if (payload.sdp) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          }
-        } catch (error) {
-          console.error('Error handling answer:', error);
-        }
-      })
-      .on('broadcast', { event: 'candidate' }, async ({ payload }: { payload: WebRTCMessage }) => {
-        try {
-          if (!pc) return;
-          await pc.addIceCandidate(payload.candidate);
-        } catch (err) {
-          console.error('handle candidate error', err);
-        }
-      })
-      .subscribe();
-  }
-
-  async function ensurePeer() {
-    if (pc) return;
-    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-    pc.ontrack = (e) => {
-      const rv = document.getElementById('remoteVideo') as HTMLVideoElement;
-      if (rv) rv.srcObject = e.streams[0];
-    };
-    pc.onicecandidate = (e) => {
-      if (e.candidate) rtcChannel?.send({ type: 'broadcast', event: 'candidate', payload: { candidate: e.candidate } });
-    };
-  }
-
-  async function startMeeting() {
-    try {
-      await ensurePeer();
-      if (!localStream) {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        const lv = document.getElementById('localVideo') as HTMLVideoElement;
-        if (lv) lv.srcObject = localStream;
-        localStream.getTracks().forEach((t) => pc!.addTrack(t, localStream!));
-      }
-      const offer = await pc!.createOffer();
-      await pc!.setLocalDescription(offer);
-      rtcChannel?.send({ type: 'broadcast', event: 'offer', payload: { sdp: offer, from: $user?.id } });
-      activeTab = 'meeting';
-    } catch (err) {
-      alert('Failed to start meeting');
-      console.error(err);
-    }
-  }
-
-  function stopMeeting() {
-    try {
-      pc?.getSenders().forEach((s) => s.track?.stop());
-      localStream?.getTracks().forEach((t) => t.stop());
-      pc?.close();
-      pc = null;
-      localStream = null;
-      const lv = document.getElementById('localVideo') as HTMLVideoElement;
-      const rv = document.getElementById('remoteVideo') as HTMLVideoElement;
-      if (lv) lv.srcObject = null;
-      if (rv) rv.srcObject = null;
-    } catch (e) {
-      console.error('stop meeting error', e);
-    }
-  }
 
   function attachCanvases() {
     sharedCanvas = document.getElementById('shared-board') as HTMLCanvasElement;

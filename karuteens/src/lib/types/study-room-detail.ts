@@ -15,7 +15,9 @@ export interface StudyRoomMessage {
   id: string;
   room_id: string;
   sender_id: string;
-  content: string;
+  content: string | null;
+  media_url?: string | null;
+  media_type?: string | null;
   created_at: string;
   is_deleted: boolean;
   profiles: {
